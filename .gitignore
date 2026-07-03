@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+ENV/
+*.db
+*.sqlite3
+
+# Node / React
+node_modules/
+dist/
+.parcel-cache/
+.oxlintrc.json
+
+# Environment/Configuration
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+
+# OS files
+.DS_Store
+Thumbs.db
