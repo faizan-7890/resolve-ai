@@ -12,6 +12,8 @@ class AgentState(TypedDict):
     context: str
     decision: Optional[str]
     response: Optional[str]
+    critique_feedback: Optional[str]
+    critique_count: int
 
 # 2. Node Functions
 
@@ -57,21 +59,67 @@ def evaluator_node(state: AgentState) -> Dict[str, Any]:
     logger.info(f"Evaluator decision: {decision}. Rationale: {rationale}")
     return {"decision": decision}
 
-def answer_node(state: AgentState) -> Dict[str, Any]:
+def writer_node(state: AgentState) -> Dict[str, Any]:
     """
-    Answer Node: Drafts a helpful customer support response using context.
+    Writer Node: Drafts or refines a helpful customer support response using context.
     """
     query = state["query"]
     context = state["context"]
+    feedback = state.get("critique_feedback", None)
     
     system_prompt = (
-        "You are an AI customer support specialist. Write a professional, friendly, and complete resolution "
-        "answering the customer's query using the provided knowledge base context. Stick only to facts in the context."
+        "You are an AI customer support specialist writer. Write a professional, friendly, and complete resolution "
+        "answering the customer's query using the provided knowledge base context. Stick only to facts in the context.\n"
     )
+    if feedback:
+        system_prompt += (
+            f"An Auditor audited your previous draft and rejected it with the following feedback:\n"
+            f"'{feedback}'\n"
+            f"Please revise your draft to address this feedback, ensuring it remains strictly grounded in the context facts."
+        )
+        
     user_prompt = f"Customer Query: {query}\n\nContext:\n{context}"
-    
+    if state.get("response"):
+        user_prompt += f"\n\nPrevious Draft:\n{state['response']}"
+        
     response = generate_llm_response(system_prompt, user_prompt, json_mode=False)
     return {"response": response}
+
+def auditor_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Auditor Node: Critiques the draft response against policy facts to prevent hallucinations.
+    """
+    query = state["query"]
+    context = state["context"]
+    response = state["response"]
+    count = state.get("critique_count", 0) + 1
+    
+    system_prompt = (
+        "You are an AI Support Ticket Auditor. Audit the drafted support response against the query and retrieved context.\n"
+        "Verify that:\n"
+        "1. Every claim in the draft is directly supported by the context. (No hallucination/speculation).\n"
+        "2. The draft directly answers the customer query.\n\n"
+        "If it meets all criteria, respond ONLY with a JSON object: {\"passed\": true, \"feedback\": \"\"}\n"
+        "If it fails (e.g. references a refund or address not in context, or is incomplete), respond ONLY with JSON: "
+        "{\"passed\": false, \"feedback\": \"detailed reason of what is incorrect or missing\"}"
+    )
+    user_prompt = f"Customer Query: {query}\n\nRetrieved Context:\n{context}\n\nDrafted Response:\n{response}"
+    
+    feedback_str = generate_llm_response(system_prompt, user_prompt, json_mode=True)
+    
+    passed = True
+    feedback = ""
+    try:
+        data = json.loads(feedback_str)
+        passed = data.get("passed", True)
+        feedback = data.get("feedback", "")
+    except Exception as e:
+        logger.warning(f"Failed to parse auditor response JSON: {feedback_str}. Exception: {e}")
+        passed = True
+        feedback = ""
+        
+    logger.info(f"Critique Round {count}: Passed={passed}. Feedback: {feedback}")
+    return {"critique_feedback": feedback, "critique_count": count, "decision": "Done" if passed else "Retry"}
 
 def clarify_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -116,13 +164,26 @@ def route_decision(state: AgentState) -> str:
     elif decision == "Escalate":
         return "escalate"
     else:
-        return "answer"
+        return "writer"
+
+def route_critique(state: AgentState) -> str:
+    """
+    Router function from Auditor to check if loop back is needed or complete.
+    """
+    decision = state.get("decision", "Done")
+    count = state.get("critique_count", 0)
+    
+    if decision == "Retry" and count < 2:
+        return "retry"
+    else:
+        return "end"
 
 workflow = StateGraph(AgentState)
 
 # Add Nodes
 workflow.add_node("evaluator", evaluator_node)
-workflow.add_node("answer", answer_node)
+workflow.add_node("writer", writer_node)
+workflow.add_node("auditor", auditor_node)
 workflow.add_node("clarify", clarify_node)
 workflow.add_node("escalate", escalate_node)
 
@@ -134,14 +195,25 @@ workflow.add_conditional_edges(
     "evaluator",
     route_decision,
     {
-        "answer": "answer",
+        "writer": "writer",
         "clarify": "clarify",
         "escalate": "escalate"
     }
 )
 
-# Standard Edges to End
-workflow.add_edge("answer", END)
+# Standard Edges
+workflow.add_edge("writer", "auditor")
+
+# Conditional Edges from Auditor
+workflow.add_conditional_edges(
+    "auditor",
+    route_critique,
+    {
+        "retry": "writer",
+        "end": END
+    }
+)
+
 workflow.add_edge("clarify", END)
 workflow.add_edge("escalate", END)
 
@@ -157,11 +229,18 @@ def run_agent_triage(query: str, context: str) -> dict:
         "query": query,
         "context": context,
         "decision": None,
-        "response": None
+        "response": None,
+        "critique_feedback": None,
+        "critique_count": 0
     }
     
     final_state = compiled_agent.invoke(initial_state)
+    
+    decision = final_state.get("decision", "Answer")
+    if decision in {"Done", "Retry"}:
+        decision = "Answer"
+        
     return {
-        "decision": final_state.get("decision", "Answer"),
+        "decision": decision,
         "response": final_state.get("response", "Could not process request.")
     }
