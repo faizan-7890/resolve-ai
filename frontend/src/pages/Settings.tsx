@@ -148,43 +148,27 @@ const Settings: React.FC = () => {
             <div className="settings-field">
               <label>
                 <Key size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                OpenAI API Key
+                NVIDIA NIM API Key
               </label>
               <div style={{ position: 'relative' }}>
                 <input
-                  type={showKey ? 'text' : 'password'}
-                  value={openaiKey}
-                  onChange={(e) => setOpenaiKey(e.target.value)}
-                  placeholder={hasStoredKey ? '••••••••••••••••••••••  (key stored)' : 'sk-...'}
+                  type="text"
+                  disabled
+                  value={hasStoredKey ? '••••••••••••••••••••••  (NVIDIA NIM Active)' : 'Not Configured'}
                   className="glass-input"
-                  style={{ paddingRight: '3rem' }}
+                  style={{ opacity: 0.8, cursor: 'not-allowed' }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  style={{
-                    position: 'absolute',
-                    right: '0.75rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--color-text-dark)',
-                    cursor: 'pointer',
-                    padding: '0.25rem'
-                  }}
-                >
-                  {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
               </div>
               <p className="api-key-hint">
                 {hasStoredKey ? (
                   <span style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                     <CheckCircle size={12} />
-                    API key is configured. Leave blank to keep current key, or enter a new one to replace it.
+                    NVIDIA NIM key is active in backend server environment (.env).
                   </span>
                 ) : (
-                  'Paste your OpenAI API key to enable real AI-powered agents. Without a key, mock responses are used.'
+                  <span style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    NVIDIA NIM API key is not set. The backend will fall back to local test heuristics.
+                  </span>
                 )}
               </p>
             </div>

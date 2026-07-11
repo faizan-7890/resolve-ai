@@ -174,12 +174,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
     }
   };
 
+  const getCategoryLabel = (cat: string) => {
+    switch (cat) {
+      case 'General': return 'General Inquiry';
+      case 'Career': return 'Technical Support';
+      case 'Academic': return 'Billing & Invoices';
+      case 'Business': return 'Feature Requests';
+      case 'Personal': return 'Other Issues';
+      default: return cat;
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'Resolved': return <span className="badge badge-teal" style={{ background: 'rgba(16, 185, 129, 0.2)' }}><CheckCircle2 size={12} style={{ marginRight: 4 }} /> {status}</span>;
-      case 'Execution': return <span className="badge badge-violet">{status}</span>;
-      case 'Planning': return <span className="badge badge-indigo">{status}</span>;
-      default: return <span className="badge badge-teal">{status}</span>;
+      case 'Resolved':
+        return <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.25)', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}><CheckCircle2 size={12} /> Resolved</span>;
+      case 'Escalated':
+        return <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.25)', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}><AlertTriangle size={12} /> Escalated</span>;
+      case 'Awaiting Clarification':
+        return <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}><Loader2 size={12} className="pulse-dots" /> Clarification Needed</span>;
+      default:
+        return <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', border: '1px solid rgba(99, 102, 241, 0.25)', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}><PlayCircle size={12} /> Open</span>;
     }
   };
 
@@ -289,10 +304,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
       {/* Welcome Banner */}
       <div>
         <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-          Problem Diagnostics Dashboard
+          AI Support Ticket Resolver
         </h1>
         <p style={{ color: 'var(--color-text-muted)' }}>
-          Create a new structured workspace or resume planning for your active cases below.
+          Submit a new support ticket request or monitor and resolve active tickets using AI agent triage.
         </p>
       </div>
 
@@ -304,21 +319,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
       }}>
         <div className="glass-card-static" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>TOTAL PROBLEMS</span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>TOTAL TICKETS</span>
             <h3 style={{ fontSize: '2rem', fontWeight: 800, marginTop: '0.25rem' }}>{totalProblems}</h3>
           </div>
           <Folder size={32} color="var(--color-primary)" style={{ opacity: 0.8 }} />
         </div>
         <div className="glass-card-static" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>ACTIVE DIAGNOSTICS</span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>PENDING TICKETS</span>
             <h3 style={{ fontSize: '2rem', fontWeight: 800, marginTop: '0.25rem' }}>{activeProblems}</h3>
           </div>
           <PlayCircle size={32} color="var(--color-secondary)" style={{ opacity: 0.8 }} />
         </div>
         <div className="glass-card-static" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>RESOLVED SYSTEMS</span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>RESOLVED TICKETS</span>
             <h3 style={{ fontSize: '2rem', fontWeight: 800, marginTop: '0.25rem' }}>{resolvedProblems}</h3>
           </div>
           <CheckCircle2 size={32} color="var(--color-success)" style={{ opacity: 0.8 }} />
@@ -354,7 +369,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
                   const pct = (count / maxCount) * 100;
                   return (
                     <div key={cat} className="bar-chart-row">
-                      <span className="bar-chart-label">{cat}</span>
+                      <span className="bar-chart-label">{getCategoryLabel(cat)}</span>
                       <div className="bar-chart-track">
                         <div 
                           className="bar-chart-fill" 
@@ -402,7 +417,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
         <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <h2 style={{ fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Plus size={20} color="var(--color-secondary)" />
-            <span>New Workspace</span>
+            <span>New Support Ticket</span>
           </h2>
           
           {error && (
@@ -414,11 +429,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
 
           <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>Problem Title</label>
+              <label style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>Ticket Subject</label>
               <input
                 type="text"
                 required
-                placeholder="e.g., Weak Interview Shortlisting"
+                placeholder="e.g., Password reset failure"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="glass-input"
@@ -426,11 +441,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>Description (Describe in plain English)</label>
+              <label style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>Ticket Description (Describe your issue)</label>
               <textarea
                 required
                 rows={5}
-                placeholder="Detail what is happening, what symptoms you see, and any constraints you are facing..."
+                placeholder="Detail what is happening, what symptoms you see, and any error codes you are facing..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="glass-input"
@@ -451,11 +466,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
                   className="glass-input"
                   style={{ background: '#060814' }}
                 >
-                  <option value="General">General</option>
-                  <option value="Career">Career</option>
-                  <option value="Academic">Academic</option>
-                  <option value="Business">Business</option>
-                  <option value="Personal">Personal</option>
+                  <option value="General">General Inquiry</option>
+                  <option value="Career">Technical Support</option>
+                  <option value="Academic">Billing & Invoices</option>
+                  <option value="Business">Feature Requests</option>
+                  <option value="Personal">Other Issues</option>
                 </select>
               </div>
 
@@ -483,12 +498,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
               {submitting ? (
                 <>
                   <Loader2 size={16} className="pulse-dots" />
-                  <span>Creating Workspace...</span>
+                  <span>Submitting Ticket...</span>
                 </>
               ) : (
                 <>
                   <Plus size={16} />
-                  <span>Launch Diagnostics</span>
+                  <span>Submit Support Ticket</span>
                 </>
               )}
             </button>
@@ -498,7 +513,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
         {/* Right Side: Workspace List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2 style={{ fontSize: '1.4rem' }}>Active Workspaces</h2>
+            <h2 style={{ fontSize: '1.4rem' }}>Active Support Tickets</h2>
             <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>Ordered by date</span>
           </div>
 
@@ -509,8 +524,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
           ) : problems.length === 0 ? (
             <div className="glass-card" style={{ textAlign: 'center', padding: '3rem 2rem', color: 'var(--color-text-muted)' }}>
               <HelpCircle size={40} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-              <p style={{ fontWeight: 500 }}>No workspaces created yet.</p>
-              <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Submit the form on the left to activate your first diagnostics project.</p>
+              <p style={{ fontWeight: 500 }}>No tickets created yet.</p>
+              <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Submit the form on the left to file your first support request.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -562,7 +577,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       {getCategoryIcon(prob.category)}
-                      <span>{prob.category}</span>
+                      <span>{getCategoryLabel(prob.category)}</span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -587,7 +602,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
                       </button>
                       
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                        <span>Analyze</span>
+                        <span>Open Ticket</span>
                         <ArrowUpRight size={14} />
                       </span>
                     </div>

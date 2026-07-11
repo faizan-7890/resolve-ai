@@ -308,11 +308,11 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error("Resolving workspace failed.");
+      if (!res.ok) throw new Error("Resolving ticket failed.");
       await fetchWorkspace();
-      showToast('Problem resolved and indexed in semantic memory!', 'success');
+      showToast('Ticket resolved and indexed in semantic memory!', 'success');
     } catch (err: any) {
-      showToast(err.message || 'Failed to resolve problem workspace.', 'error');
+      showToast(err.message || 'Failed to resolve ticket.', 'error');
     } finally {
       setAiLoading(false);
     }
@@ -322,7 +322,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '1rem' }}>
         <Loader2 size={40} className="pulse-dots" style={{ color: 'var(--color-primary)' }} />
-        <span>Syncing workspace nodes...</span>
+        <span>Syncing ticket agent nodes...</span>
       </div>
     );
   }
@@ -331,7 +331,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
     return (
       <div className="app-container" style={{ textAlign: 'center', padding: '3rem' }}>
         <AlertTriangle size={48} color="red" style={{ marginBottom: '1rem' }} />
-        <h3>Workspace Sync Offline</h3>
+        <h3>Ticket Sync Offline</h3>
         <p style={{ color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>{error || "Unknown error occurred"}</p>
         <button onClick={onBack} className="glass-btn glass-btn-secondary" style={{ marginTop: '1.5rem' }}>
           <ArrowLeft size={16} />
@@ -408,7 +408,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
           <div className="glass-card-static">
             <h3 style={{ fontSize: '1rem', color: '#fff', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Compass size={16} color="var(--color-secondary)" />
-              <span>Intake Description</span>
+              <span>Ticket Summary</span>
             </h3>
             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
               {problem.description}
@@ -420,12 +420,12 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <h3 style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <BookOpen size={16} color="var(--color-accent)" />
-                <span>RAG Similarity Insights</span>
+                <span>AI Knowledge Base Matches</span>
               </h3>
               
               {similarCases.length === 0 ? (
                 <p style={{ fontSize: '0.8rem', color: 'var(--color-text-dark)' }}>
-                  No similar solved cases in vector DB memory yet. Indexing happens once workspaces are Resolved.
+                  No similar solved cases in vector DB memory yet. Indexing happens once tickets are Resolved.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.25rem' }}>
@@ -462,9 +462,9 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                   <HelpCircle size={24} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Clarifier Agent Assessment</h2>
+                  <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>AI Clarifier Questions</h2>
                   <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginTop: '0.15rem' }}>
-                    We need to refine constraints and context before diagnosing. Let the Clarifier ask targeted questions.
+                    The AI Clarifier needs more information to triage this ticket. Please answer the questions below.
                   </p>
                 </div>
               </div>
@@ -478,7 +478,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                     style={{ fontSize: '1rem', padding: '1rem 2rem' }}
                   >
                     <Cpu size={18} />
-                    <span>Generate Clarifying Questions</span>
+                    <span>Ask Clarifying Questions</span>
                   </button>
                 </div>
               ) : (
@@ -523,9 +523,9 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                   <Layers size={24} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Diagnosis Engine Workspace</h2>
+                  <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>AI Triage Decision</h2>
                   <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginTop: '0.15rem' }}>
-                    Deconstruct root causes using the 5 Whys framework, SWOT models, and First Principles breakdowns.
+                    The AI agent evaluates policy documents and tickets to recommend resolutions.
                   </p>
                 </div>
               </div>
@@ -539,7 +539,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                     style={{ fontSize: '1rem', padding: '1rem 2rem' }}
                   >
                     <Cpu size={18} />
-                    <span>Run AI Diagnosis Engine</span>
+                    <span>Run AI Triage Agent</span>
                   </button>
                 </div>
               ) : (
@@ -549,7 +549,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                   <div>
                     <h3 style={{ fontSize: '1.1rem', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <Activity size={16} color="var(--color-primary)" />
-                      <span>5 Whys Root Cause Chain</span>
+                      <span>AI Reasoning Chain</span>
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '0.5rem' }}>
                       {rootCauses.map((cause, idx) => (
@@ -585,7 +585,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                   <div>
                     <h3 style={{ fontSize: '1.1rem', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <Layers size={16} color="var(--color-secondary)" />
-                      <span>SWOT Matrix Analysis</span>
+                      <span>Knowledge Match Assessment</span>
                     </h3>
                     <div className="swot-matrix">
                       <div className="swot-box swot-s">
@@ -619,7 +619,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                   <div>
                     <h3 style={{ fontSize: '1.1rem', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <Lightbulb size={16} color="var(--color-warning)" />
-                      <span>First Principles Deconstruction</span>
+                      <span>Key Policy Extraction</span>
                     </h3>
                     <ul style={{ paddingLeft: '1.25rem', fontSize: '0.9rem', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {firstPrinciples.map((item, i) => (
@@ -636,7 +636,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                     style={{ alignSelf: 'flex-end', marginTop: '1rem' }}
                   >
                     <Play size={16} />
-                    <span>Develop Strategy Leaderboard</span>
+                    <span>Generate Draft Resolutions</span>
                   </button>
 
                 </div>
@@ -652,9 +652,9 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                   <Award size={24} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Strategy Selection Panel</h2>
+                  <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Suggested Resolutions</h2>
                   <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginTop: '0.15rem' }}>
-                    Compare options ranked by feasibility, potential impact, risk factors, and resource constraints.
+                    Select the most accurate drafted support resolution for this ticket.
                   </p>
                 </div>
               </div>
@@ -668,7 +668,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                     style={{ fontSize: '1rem', padding: '1rem 2rem' }}
                   >
                     <Cpu size={18} />
-                    <span>Generate & Score Solutions</span>
+                    <span>Generate Suggested Resolutions</span>
                   </button>
                 </div>
               ) : (
@@ -761,7 +761,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                     style={{ alignSelf: 'flex-end', marginTop: '1rem' }}
                   >
                     <Play size={16} />
-                    <span>Generate Execution Roadmap</span>
+                    <span>Compile Action Checklist</span>
                   </button>
 
                 </div>
@@ -778,9 +778,9 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                     <ListTodo size={24} />
                   </div>
                   <div>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Execution Task Roadmap</h2>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>Resolution Actions & Checklist</h2>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginTop: '0.15rem' }}>
-                      Mark milestones completed as you make progress. Complete the items to solve the case.
+                      Follow these steps to apply the resolution. Mark each task completed to close the ticket.
                     </p>
                   </div>
                 </div>
@@ -865,7 +865,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                 }}
               >
                 <CheckCircle size={16} />
-                <span>Resolve Problem Workspace & Index</span>
+                <span>Mark Ticket Resolved & Index</span>
               </button>
             </div>
           )}
@@ -885,9 +885,9 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
               </div>
               
               <div>
-                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff' }}>Problem System Resolved</h2>
+                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff' }}>Support Ticket Resolved</h2>
                 <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginTop: '0.5rem', maxWidth: '400px' }}>
-                  Congratulations! This workspace has been marked as fully resolved. The outcome summaries and structures have been loaded into your personalized semantic RAG database.
+                  This support ticket is marked as Resolved. The ticket inquiry and final resolution have been indexed in the pgvector database for future reference.
                 </p>
               </div>
 

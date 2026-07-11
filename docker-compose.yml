@@ -11,15 +11,5 @@ services:
     volumes:
       - resolveai_pgdata:/var/lib/postgresql/data
 
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: resolveai-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - resolveai_qdrant:/qdrant/storage
-
 volumes:
   resolveai_pgdata:
-  resolveai_qdrant:
