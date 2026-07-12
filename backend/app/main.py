@@ -1,8 +1,12 @@
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.middleware.rate_limiter import RateLimiter
 from app.api.routes import auth, ingest, tickets, query, analytics, settings as settings_router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="ResolveAI - AI Support Ticket Resolver",
@@ -33,6 +37,18 @@ app.include_router(tickets.router, prefix="/api/tickets")
 app.include_router(query.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception on {request.method} {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "detail": "An unexpected error occurred. Please try again later.",
+            "path": str(request.url.path),
+        }
+    )
 
 @app.get("/")
 def read_root():

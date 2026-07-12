@@ -244,3 +244,97 @@ def run_agent_triage(query: str, context: str) -> dict:
         "decision": decision,
         "response": final_state.get("response", "Could not process request.")
     }
+
+
+async def stream_agent_triage(query: str, context: str):
+    """
+    Async generator that runs the LangGraph agent and yields SSE-format JSON events
+    at each node transition for real-time frontend streaming.
+
+    Yields strings in the format: 'data: <json>\\n\\n'
+    """
+    import asyncio
+
+    def _emit(event: dict) -> str:
+        return f"data: {json.dumps(event)}\n\n"
+
+    # Step 1: Retrieval context notice
+    chunk_count = len([c for c in context.split("[Doc:") if c.strip()])
+    yield _emit({"step": "retrieval", "status": "done", "detail": f"Retrieved {chunk_count} knowledge base chunk(s)."})
+    await asyncio.sleep(0)
+
+    # Step 2: Evaluator
+    yield _emit({"step": "evaluator", "status": "running", "detail": "Evaluating query and triage path..."})
+    await asyncio.sleep(0)
+
+    initial_state: AgentState = {
+        "query": query,
+        "context": context,
+        "decision": None,
+        "response": None,
+        "critique_feedback": None,
+        "critique_count": 0
+    }
+
+    # Run evaluator
+    eval_result = evaluator_node(initial_state)
+    decision = eval_result.get("decision", "Answer")
+    yield _emit({"step": "evaluator", "status": "done", "decision": decision})
+    await asyncio.sleep(0)
+
+    current_state: AgentState = {**initial_state, **eval_result}
+
+    # Step 3: Route to writer / clarify / escalate
+    if decision == "Clarify":
+        yield _emit({"step": "clarify", "status": "running", "detail": "Drafting clarification question..."})
+        await asyncio.sleep(0)
+        clarify_result = clarify_node(current_state)
+        current_state = {**current_state, **clarify_result}
+        yield _emit({"step": "clarify", "status": "done"})
+        await asyncio.sleep(0)
+
+    elif decision == "Escalate":
+        yield _emit({"step": "escalate", "status": "running", "detail": "Preparing escalation message..."})
+        await asyncio.sleep(0)
+        escalate_result = escalate_node(current_state)
+        current_state = {**current_state, **escalate_result}
+        yield _emit({"step": "escalate", "status": "done"})
+        await asyncio.sleep(0)
+
+    else:
+        # Writer → Auditor loop (max 2 retries)
+        for attempt in range(3):
+            yield _emit({"step": "writer", "status": "running", "detail": f"Drafting support response (attempt {attempt + 1})..."})
+            await asyncio.sleep(0)
+            writer_result = writer_node(current_state)
+            current_state = {**current_state, **writer_result}
+            yield _emit({"step": "writer", "status": "done"})
+            await asyncio.sleep(0)
+
+            yield _emit({"step": "auditor", "status": "running", "detail": "Auditing draft for accuracy..."})
+            await asyncio.sleep(0)
+            auditor_result = auditor_node(current_state)
+            current_state = {**current_state, **auditor_result}
+            passed = current_state.get("decision") != "Retry"
+            yield _emit({
+                "step": "auditor",
+                "status": "done",
+                "passed": passed,
+                "feedback": current_state.get("critique_feedback", "") if not passed else ""
+            })
+            await asyncio.sleep(0)
+
+            if passed or attempt >= 1:
+                break
+
+    # Final outcome
+    final_decision = current_state.get("decision", "Answer")
+    if final_decision in {"Done", "Retry"}:
+        final_decision = decision  # use evaluator's original decision
+
+    yield _emit({
+        "step": "complete",
+        "status": "done",
+        "decision": final_decision,
+        "response": current_state.get("response", "Could not process request.")
+    })

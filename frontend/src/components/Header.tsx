@@ -1,14 +1,33 @@
 import React, { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, Layout, Cpu, User, Settings, Menu, X } from 'lucide-react';
 
-interface HeaderProps {
-  onNavigate: (target: string) => void;
-}
-
-const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
+const Header: React.FC = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+    setMobileMenuOpen(false);
+  };
+
+  const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
+    padding: '0.45rem 0.85rem',
+    fontSize: '0.8rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.35rem',
+    borderRadius: '8px',
+    border: `1px solid ${isActive ? 'var(--color-primary)' : 'var(--border-color)'}`,
+    background: isActive ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+    color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+    textDecoration: 'none',
+    transition: 'all 0.2s ease',
+    cursor: 'pointer',
+  });
 
   return (
     <header style={{
@@ -28,9 +47,9 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
         justifyContent: 'space-between'
       }}>
         {/* Logo */}
-        <div 
-          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
-          onClick={() => onNavigate('dashboard')}
+        <NavLink
+          to="/"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}
         >
           <div style={{
             background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%)',
@@ -53,32 +72,24 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
           }}>
             ResolveAI
           </span>
-        </div>
+        </NavLink>
 
         {/* Desktop Nav */}
         {user ? (
           <div className="header-desktop-nav" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button 
-              onClick={() => onNavigate('dashboard')}
-              className="glass-btn glass-btn-secondary"
-              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-            >
+            <NavLink to="/" style={navLinkStyle} end>
               <Layout size={14} />
               <span>Dashboard</span>
-            </button>
-            
-            <button 
-              onClick={() => onNavigate('settings')}
-              className="glass-btn glass-btn-secondary"
-              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-            >
+            </NavLink>
+
+            <NavLink to="/settings" style={navLinkStyle}>
               <Settings size={14} />
               <span>Settings</span>
-            </button>
+            </NavLink>
 
-            <div style={{ 
-              width: '1px', 
-              height: '24px', 
+            <div style={{
+              width: '1px',
+              height: '24px',
               background: 'var(--border-color)',
               margin: '0 0.25rem'
             }} />
@@ -87,9 +98,9 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
               <User size={14} />
               <span>{user.name || user.email}</span>
             </div>
-            
-            <button 
-              onClick={logout}
+
+            <button
+              onClick={handleLogout}
               className="glass-btn glass-btn-secondary"
               style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
             >
@@ -100,7 +111,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
             <Layout size={16} />
-            <span>AI Problem Workspace</span>
+            <span>AI Support Ticket Resolver</span>
           </div>
         )}
 
@@ -138,24 +149,27 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
             <User size={14} />
             <span>{user.name || user.email}</span>
           </div>
-          <button 
-            onClick={() => { onNavigate('dashboard'); setMobileMenuOpen(false); }}
+          <NavLink
+            to="/"
+            onClick={() => setMobileMenuOpen(false)}
             className="glass-btn glass-btn-secondary"
-            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem' }}
+            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem', textDecoration: 'none' }}
+            end
           >
             <Layout size={14} />
             <span>Dashboard</span>
-          </button>
-          <button 
-            onClick={() => { onNavigate('settings'); setMobileMenuOpen(false); }}
+          </NavLink>
+          <NavLink
+            to="/settings"
+            onClick={() => setMobileMenuOpen(false)}
             className="glass-btn glass-btn-secondary"
-            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem' }}
+            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem', textDecoration: 'none' }}
           >
             <Settings size={14} />
             <span>Settings</span>
-          </button>
-          <button 
-            onClick={() => { logout(); setMobileMenuOpen(false); }}
+          </NavLink>
+          <button
+            onClick={handleLogout}
             className="glass-btn glass-btn-danger"
             style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem' }}
           >
@@ -165,7 +179,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Responsive CSS for mobile menu */}
+      {/* Responsive CSS */}
       <style>{`
         @media (max-width: 768px) {
           .header-desktop-nav { display: none !important; }

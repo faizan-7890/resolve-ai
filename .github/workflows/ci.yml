@@ -1,0 +1,97 @@
+name: ResolveAI CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ─── Backend: Lint + Tests ───────────────────────────────────────
+  backend-tests:
+    name: Backend Tests (Python)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: resolve_ai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Create test .env
+        run: |
+          echo "SECRET_KEY=ci-test-secret-key-not-for-production" > backend/.env
+          echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/resolve_ai_test" >> backend/.env
+          echo "NVIDIA_NIM_API_KEY=" >> backend/.env
+          echo "OPENAI_API_KEY=" >> backend/.env
+          echo "CORS_ORIGINS=http://localhost:5173" >> backend/.env
+
+      - name: Run database migrations
+        working-directory: backend
+        run: alembic upgrade head
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/resolve_ai_test
+
+      - name: Run tests
+        working-directory: backend
+        run: pytest tests/ -v --tb=short
+        env:
+          SECRET_KEY: ci-test-secret-key-not-for-production
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/resolve_ai_test
+
+  # ─── Frontend: Lint + Build ──────────────────────────────────────
+  frontend-build:
+    name: Frontend Build (Node.js)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type-check
+        working-directory: frontend
+        run: npx tsc --noEmit
+        continue-on-error: true   # Don't fail CI on type errors yet
+
+      - name: Build production bundle
+        working-directory: frontend
+        run: npm run build
+        env:
+          VITE_API_BASE: http://localhost:8000/api

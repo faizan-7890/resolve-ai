@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, API_BASE } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
@@ -24,9 +25,6 @@ interface AnalyticsData {
   recent_activity: Array<{ title: string; status: string; created_at: string }>;
 }
 
-interface DashboardProps {
-  onSelectProblem: (id: number) => void;
-}
 
 const STATUS_COLORS: Record<string, string> = {
   'Intake': '#6366f1',
@@ -45,9 +43,10 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Personal': '#f59e0b',
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
+const Dashboard: React.FC = () => {
   const { token } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [problems, setProblems] = useState<Problem[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -63,7 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
 
   const fetchProblems = async () => {
     try {
-      const res = await fetch(`${API_BASE}/problems`, {
+      const res = await fetch(`${API_BASE}/tickets`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -73,7 +72,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
         setProblems(data);
       }
     } catch (err) {
-      console.error("Error fetching problems", err);
+      console.error("Error fetching tickets", err);
     } finally {
       setLoading(false);
     }
@@ -533,7 +532,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectProblem }) => {
                 <div 
                   key={prob.id} 
                   className="glass-card"
-                  onClick={() => onSelectProblem(prob.id)}
+                  onClick={() => navigate(`/tickets/${prob.id}`)}
+
                   style={{
                     cursor: 'pointer',
                     display: 'flex',

@@ -1,7 +1,7 @@
 import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -11,12 +11,11 @@ from app.models.document import Document, DocumentChunk
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.services.retrieval_service import retrieve_similar_chunks
-from app.services.agent_service import run_agent_triage
+from app.services.agent_service import run_agent_triage, stream_agent_triage
 from app.services.embedding_service import get_embeddings
 
 logger = logging.getLogger(__name__)
 
-# Note: We omit prefix here so we can mount this router under both /api/tickets and /api/problems in main.py
 router = APIRouter(tags=["tickets"])
 
 class TicketCreate(BaseModel):
@@ -78,16 +77,30 @@ def create_ticket(
 @router.get("/", response_model=None)
 def list_tickets(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    status: Optional[str] = None,
+    search: Optional[str] = None,
 ):
     """
     Lists support tickets. Admins see all tickets, standard users see their own.
+    Supports optional ?status= filter and ?search= keyword search on title/description.
     """
     if current_user.role == "admin":
-        tickets = db.query(Ticket).all()
+        query = db.query(Ticket)
     else:
-        tickets = db.query(Ticket).filter(Ticket.user_id == current_user.id).all()
-        
+        query = db.query(Ticket).filter(Ticket.user_id == current_user.id)
+
+    if status:
+        query = query.filter(Ticket.status == status)
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            Ticket.title.ilike(search_term) | Ticket.description.ilike(search_term)
+        )
+
+    tickets = query.order_by(Ticket.created_at.desc()).all()
+
     return [
         {
             "id": t.id,
@@ -432,6 +445,79 @@ def run_triage_diagnose_pipeline(
         }),
         "first_principles": json.dumps(["Support tickets must resolve or route immediately."])
     }
+
+
+@router.get("/{ticket_id}/diagnose/stream", response_model=None)
+async def stream_triage_diagnose(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    SSE (Server-Sent Events) endpoint that streams LangGraph agent node transitions live.
+    Frontend connects via EventSource and receives step-by-step progress events.
+
+    Event format: data: {"step": "evaluator", "status": "running", ...}
+    """
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found.")
+
+    query_text = f"Title: {ticket.title}\nDescription: {ticket.description}"
+
+    # Retrieve knowledge base context (done once before streaming starts)
+    retrieved_chunks = retrieve_similar_chunks(db, query_text, limit=3)
+    context_str = "\n\n".join(
+        [f"[Doc: {c.get('document_title', 'KB')}] {c['content']}" for c in retrieved_chunks]
+    ) or "No relevant knowledge base context found."
+
+    async def event_generator():
+        async for event_str in stream_agent_triage(query_text, context_str):
+            yield event_str
+
+        # After streaming completes, persist the result
+        # Re-run a quick synchronous triage for DB persistence
+        try:
+            agent_output = run_agent_triage(query_text, context_str)
+            decision = agent_output["decision"]
+            response_text = agent_output["response"]
+
+            if decision == "Answer":
+                ticket.resolution = response_text
+                ticket.status = "Resolved"
+                db.add(TicketActivityLog(
+                    ticket_id=ticket.id,
+                    action="Resolved",
+                    detail=f"AI Agent resolved ticket: {response_text[:200]}"
+                ))
+            elif decision == "Clarify":
+                ticket.status = "Awaiting Clarification"
+                db.add(ClarificationQuestion(ticket_id=ticket.id, question=response_text))
+                db.add(TicketActivityLog(
+                    ticket_id=ticket.id,
+                    action="Awaiting Clarification",
+                    detail=f"AI Agent requested clarification: {response_text[:200]}"
+                ))
+            elif decision == "Escalate":
+                ticket.status = "Escalated"
+                db.add(TicketActivityLog(
+                    ticket_id=ticket.id,
+                    action="Escalated",
+                    detail=f"AI Agent escalated ticket: {response_text[:200]}"
+                ))
+            db.commit()
+        except Exception as e:
+            logger.error(f"SSE stream: failed to persist triage result for ticket {ticket_id}: {e}")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
 
 @router.get("/{ticket_id}/similar", response_model=None)
 def get_similar_vector_matches(

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, API_BASE } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
@@ -68,12 +69,12 @@ interface ActivityEntry {
   created_at: string;
 }
 
-interface WorkspaceProps {
-  problemId: number;
-  onBack: () => void;
-}
+interface WorkspaceProps {}
 
-const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
+const Workspace: React.FC<WorkspaceProps> = () => {
+  const { id } = useParams<{ id: string }>();
+  const problemId = parseInt(id || '0', 10);
+  const navigate = useNavigate();
   const { token } = useAuth();
   const { showToast } = useToast();
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -85,11 +86,12 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
 
   // Operation Loaders
   const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [agentSteps, setAgentSteps] = useState<Array<{step: string; status: string; detail?: string; decision?: string; passed?: boolean}>>([]);
   const [answers, setAnswers] = useState<Record<number, string>>({});
 
   const fetchWorkspace = async () => {
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Could not load problem workspace.");
@@ -118,7 +120,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
 
   const fetchSimilarCases = async () => {
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/similar`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/similar`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -132,7 +134,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
 
   const fetchActivityLog = async () => {
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/activity`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/activity`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -146,7 +148,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
 
   const handleExportReport = async () => {
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/export`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/export`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Export failed.");
@@ -172,7 +174,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
   const handleGenerateClarifications = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/clarify/generate`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/clarify/generate`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -194,7 +196,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
         answer: text
       }));
       
-      const res = await fetch(`${API_BASE}/problems/${problemId}/clarify/answer`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/clarify/answer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -213,27 +215,59 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
     }
   };
 
-  const handleRunDiagnosis = async () => {
+  const handleRunDiagnosis = () => {
     setAiLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/diagnose`, {
+    setAgentSteps([]);
+
+    const url = `${API_BASE}/tickets/${problemId}/diagnose/stream`;
+    const es = new EventSource(url + `?token=${encodeURIComponent(token || '')}`);
+
+    // Note: EventSource doesn't support custom headers, so we use the streaming
+    // GET endpoint. The token is sent as a query param for SSE auth.
+    // A more secure alternative is a cookie-based session.
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setAgentSteps(prev => {
+          // Update or append this step
+          const existing = prev.findIndex(s => s.step === data.step && s.status === 'running');
+          if (existing >= 0 && data.status === 'done') {
+            const updated = [...prev];
+            updated[existing] = data;
+            return updated;
+          }
+          return [...prev, data];
+        });
+
+        if (data.step === 'complete') {
+          es.close();
+          setAiLoading(false);
+          fetchWorkspace();
+          showToast(`Triage complete — ${data.decision}`, 'success');
+        }
+      } catch (e) {
+        console.error('SSE parse error', e);
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      setAiLoading(false);
+      // Fallback to synchronous diagnose if SSE fails
+      fetch(`${API_BASE}/tickets/${problemId}/diagnose`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error("Diagnosis engine run failed.");
-      await fetchWorkspace();
-      showToast('Diagnosis complete — root causes identified.', 'success');
-    } catch (err: any) {
-      showToast(err.message || 'Diagnosis failed.', 'error');
-    } finally {
-      setAiLoading(false);
-    }
+      })
+        .then(res => { if (!res.ok) throw new Error(); return res; })
+        .then(() => { fetchWorkspace(); showToast('Diagnosis complete.', 'success'); })
+        .catch(() => showToast('Diagnosis failed. Please retry.', 'error'));
+    };
   };
 
   const handleGenerateSolutions = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/solutions`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/solutions`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -249,7 +283,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
 
   const handleSelectSolution = async (solId: number) => {
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/solutions/${solId}/select`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/solutions/${solId}/select`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -264,7 +298,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
   const handleGeneratePlan = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/plan`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/plan`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -281,7 +315,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
   const handleToggleTask = async (taskId: number, currentStatus: string) => {
     const nextStatus = currentStatus === 'Done' ? 'Pending' : 'Done';
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/tasks/${taskId}`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/tasks/${taskId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -304,7 +338,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
   const handleResolveProblem = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/problems/${problemId}/resolve`, {
+      const res = await fetch(`${API_BASE}/tickets/${problemId}/resolve`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -333,7 +367,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
         <AlertTriangle size={48} color="red" style={{ marginBottom: '1rem' }} />
         <h3>Ticket Sync Offline</h3>
         <p style={{ color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>{error || "Unknown error occurred"}</p>
-        <button onClick={onBack} className="glass-btn glass-btn-secondary" style={{ marginTop: '1.5rem' }}>
+        <button onClick={() => navigate('/')} className="glass-btn glass-btn-secondary" style={{ marginTop: '1.5rem' }}>
           <ArrowLeft size={16} />
           <span>Return to Dashboard</span>
         </button>
@@ -366,7 +400,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
       {/* Workspace Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button onClick={onBack} className="glass-btn glass-btn-secondary" style={{ padding: '0.5rem' }}>
+          <button onClick={() => navigate('/')} className="glass-btn glass-btn-secondary" style={{ padding: '0.5rem' }}>
             <ArrowLeft size={18} />
           </button>
           <div>
@@ -541,6 +575,53 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                     <Cpu size={18} />
                     <span>Run AI Triage Agent</span>
                   </button>
+
+                  {/* Live Agent Step Timeline — shown while streaming */}
+                  {agentSteps.length > 0 && (
+                    <div style={{
+                      marginTop: '1.25rem',
+                      background: 'rgba(6, 8, 20, 0.6)',
+                      border: '1px solid rgba(99, 102, 241, 0.2)',
+                      borderRadius: '12px',
+                      padding: '1rem 1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.6rem'
+                    }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+                        🤖 LangGraph Agent Pipeline
+                      </div>
+                      {agentSteps.map((s, idx) => {
+                        const stepLabel: Record<string, string> = {
+                          retrieval: '🔍 Knowledge Base Retrieval',
+                          evaluator: '⚖️ Evaluator',
+                          writer: '✍️ Writer',
+                          auditor: '🔎 Auditor',
+                          clarify: '❓ Clarify',
+                          escalate: '🚨 Escalate',
+                          complete: '✅ Complete',
+                        };
+                        const isRunning = s.status === 'running';
+                        const isDone = s.status === 'done';
+                        return (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.875rem' }}>
+                            <span style={{
+                              width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                              background: isRunning ? 'var(--color-primary)' : isDone ? '#10b981' : '#6b7280',
+                              boxShadow: isRunning ? '0 0 8px var(--color-primary)' : 'none',
+                              animation: isRunning ? 'pulse 1s ease-in-out infinite' : 'none',
+                            }} />
+                            <span style={{ color: isDone ? '#d1fae5' : 'var(--color-text-muted)', fontWeight: isRunning ? 600 : 400 }}>
+                              {stepLabel[s.step] || s.step}
+                              {s.decision ? ` → ${s.decision}` : ''}
+                              {s.detail ? ` — ${s.detail}` : ''}
+                              {s.passed === false ? ' ↻ Retrying...' : ''}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -908,7 +989,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ problemId, onBack }) => {
                 <div><span style={{ color: 'var(--color-primary)' }}>Dimensions: </span> 128 normalized</div>
               </div>
 
-              <button onClick={onBack} className="glass-btn glass-btn-secondary" style={{ marginTop: '1rem' }}>
+              <button onClick={() => navigate('/')} className="glass-btn glass-btn-secondary" style={{ marginTop: '1rem' }}>
                 <ArrowLeft size={16} />
                 <span>Return to Dashboard</span>
               </button>

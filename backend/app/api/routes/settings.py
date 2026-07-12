@@ -21,7 +21,8 @@ def get_settings(
         "name": current_user.name,
         "email": current_user.email,
         "role": current_user.role,
-        "has_openai_key": bool(settings.NVIDIA_NIM_API_KEY),
+        "has_nvidia_key": bool(settings.NVIDIA_NIM_API_KEY),
+        "has_openai_key": bool(settings.OPENAI_API_KEY),
         "created_at": current_user.created_at.isoformat()
     }
 
@@ -44,6 +45,7 @@ def update_settings(
         "name": current_user.name,
         "email": current_user.email,
         "role": current_user.role,
-        "has_openai_key": bool(settings.NVIDIA_NIM_API_KEY),
+        "has_nvidia_key": bool(settings.NVIDIA_NIM_API_KEY),
+        "has_openai_key": bool(settings.OPENAI_API_KEY),
         "created_at": current_user.created_at.isoformat()
     }

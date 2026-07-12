@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import Header from './components/Header';
@@ -7,12 +8,9 @@ import Dashboard from './pages/Dashboard';
 import Workspace from './pages/Workspace';
 import Settings from './pages/Settings';
 
-type ViewState = 'dashboard' | 'workspace' | 'settings';
-
-const InnerApp: React.FC = () => {
+// Route guard — redirects to /login if not authenticated
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token, loading } = useAuth();
-  const [view, setView] = useState<ViewState>('dashboard');
-  const [selectedProblemId, setSelectedProblemId] = useState<number | null>(null);
 
   if (loading) {
     return (
@@ -37,75 +35,104 @@ const InnerApp: React.FC = () => {
         }} />
         <span>Authenticating secure node...</span>
         <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
+          @keyframes spin { to { transform: rotate(360deg); } }
         `}</style>
       </div>
     );
   }
 
-  // Not logged in -> Show login/register
   if (!token) {
-    return (
-      <>
-        <div className="space-bg" />
-        <div className="glow-orb-1" />
-        <div className="glow-orb-2" />
-        <Header onNavigate={() => {}} />
-        <Auth />
-      </>
-    );
+    return <Navigate to="/login" replace />;
   }
 
-  const handleNavigate = (target: string) => {
-    if (target === 'dashboard') {
-      setView('dashboard');
-      setSelectedProblemId(null);
-    } else if (target === 'settings') {
-      setView('settings');
-      setSelectedProblemId(null);
-    }
-  };
+  return <>{children}</>;
+};
 
-  const handleSelectProblem = (id: number) => {
-    setSelectedProblemId(id);
-    setView('workspace');
-  };
+// Layout wrapper for authenticated pages (includes background + header)
+const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <>
+    <div className="space-bg" />
+    <div className="glow-orb-1" />
+    <div className="glow-orb-2" />
+    <Header />
+    {children}
+  </>
+);
 
-  const handleBackToDashboard = () => {
-    setView('dashboard');
-    setSelectedProblemId(null);
-  };
+const AppRoutes: React.FC = () => {
+  const { token } = useAuth();
 
-  // Logged in -> Show dashboard, workspace, or settings
   return (
-    <>
-      <div className="space-bg" />
-      <div className="glow-orb-1" />
-      <div className="glow-orb-2" />
-      <Header onNavigate={handleNavigate} />
-      {view === 'settings' ? (
-        <Settings />
-      ) : view === 'workspace' && selectedProblemId !== null ? (
-        <Workspace 
-          problemId={selectedProblemId} 
-          onBack={handleBackToDashboard} 
-        />
-      ) : (
-        <Dashboard onSelectProblem={handleSelectProblem} />
-      )}
-    </>
+    <Routes>
+      {/* Public: login/register */}
+      <Route
+        path="/login"
+        element={
+          token ? (
+            <Navigate to="/" replace />
+          ) : (
+            <>
+              <div className="space-bg" />
+              <div className="glow-orb-1" />
+              <div className="glow-orb-2" />
+              <Header />
+              <Auth />
+            </>
+          )
+        }
+      />
+
+      {/* Protected: Dashboard */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <AuthenticatedLayout>
+              <Dashboard />
+            </AuthenticatedLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Protected: Ticket Workspace */}
+      <Route
+        path="/tickets/:id"
+        element={
+          <ProtectedRoute>
+            <AuthenticatedLayout>
+              <Workspace />
+            </AuthenticatedLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Protected: Settings */}
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <AuthenticatedLayout>
+              <Settings />
+            </AuthenticatedLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Catch-all: redirect to home */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 };
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <InnerApp />
-      </ToastProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 };
 
