@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.middleware.rate_limiter import RateLimiter
 from app.api.routes import auth, ingest, tickets, query, analytics, settings as settings_router
 
 app = FastAPI(
@@ -12,14 +13,17 @@ app = FastAPI(
 # Parse CORS origins from comma-separated config value
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
 
-# Set up CORS middleware for React frontend integration
+# Set up CORS middleware with restricted methods and headers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+# Add rate limiting middleware
+app.add_middleware(RateLimiter)
 
 # Include routers
 app.include_router(auth.router, prefix="/api")

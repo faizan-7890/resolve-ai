@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, field_validator, Field
 from typing import List, Optional, Any, Dict
 from datetime import datetime
+from app.schemas.validators import CommonValidators
 
 # --- Token Schemas ---
 class Token(BaseModel):
@@ -19,6 +20,23 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        return CommonValidators.validate_password(v)
+    
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v):
+        if v is None:
+            return v
+        return CommonValidators.validate_name(v)
+    
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        return CommonValidators.validate_enum_field(v, ["user", "admin"])
 
 class UserOut(UserBase):
     id: int
@@ -29,10 +47,20 @@ class UserOut(UserBase):
 
 # --- Clarification Schemas ---
 class ClarificationCreate(BaseModel):
-    question: str
+    question: str = Field(..., min_length=3, max_length=1000)
+    
+    @field_validator('question')
+    @classmethod
+    def validate_question(cls, v):
+        return CommonValidators.sanitize_text(v)
 
 class ClarificationAnswer(BaseModel):
-    answer: str
+    answer: str = Field(..., min_length=1, max_length=5000)
+    
+    @field_validator('answer')
+    @classmethod
+    def validate_answer(cls, v):
+        return CommonValidators.sanitize_text(v)
 
 class ClarificationOut(BaseModel):
     id: int
@@ -71,12 +99,34 @@ class SolutionOut(BaseModel):
 
 # --- Task Schemas ---
 class TaskCreate(BaseModel):
-    title: str
+    title: str = Field(..., min_length=3, max_length=500)
     priority: str = "Medium"
-    timeline: Optional[str] = None
+    timeline: Optional[str] = Field(None, max_length=500)
+    
+    @field_validator('title')
+    @classmethod
+    def validate_title(cls, v):
+        return CommonValidators.sanitize_text(v)
+    
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        return CommonValidators.validate_enum_field(v, ["Low", "Medium", "High", "Critical"])
+    
+    @field_validator('timeline')
+    @classmethod
+    def validate_timeline(cls, v):
+        if v is None:
+            return v
+        return CommonValidators.sanitize_text(v)
 
 class TaskUpdate(BaseModel):
-    status: str  # "Pending", "In Progress", "Done"
+    status: str
+    
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v):
+        return CommonValidators.validate_enum_field(v, ["Pending", "In Progress", "Done"])
 
 class TaskOut(BaseModel):
     id: int
@@ -91,10 +141,36 @@ class TaskOut(BaseModel):
 
 # --- Problem Schemas ---
 class ProblemBase(BaseModel):
-    title: str
-    description: str
+    title: str = Field(..., min_length=5, max_length=500)
+    description: str = Field(..., min_length=10, max_length=5000)
     category: str = "General"
     urgency: str = "Medium"
+    
+    @field_validator('title')
+    @classmethod
+    def validate_title(cls, v):
+        v = CommonValidators.sanitize_text(v)
+        CommonValidators.validate_non_empty_string(v, "title", min_length=5)
+        return v
+    
+    @field_validator('description')
+    @classmethod
+    def validate_description(cls, v):
+        v = CommonValidators.sanitize_text(v)
+        CommonValidators.validate_non_empty_string(v, "description", min_length=10)
+        return v
+    
+    @field_validator('category')
+    @classmethod
+    def validate_category(cls, v):
+        return CommonValidators.validate_enum_field(
+            v, ["General", "Technical", "Billing", "Feature Request", "Bug Report"]
+        )
+    
+    @field_validator('urgency')
+    @classmethod
+    def validate_urgency(cls, v):
+        return CommonValidators.validate_enum_field(v, ["Low", "Medium", "High", "Critical"])
 
 class ProblemCreate(ProblemBase):
     pass
@@ -145,4 +221,11 @@ class SettingsOut(BaseModel):
 class SettingsUpdate(BaseModel):
     name: Optional[str] = None
     openai_api_key: Optional[str] = None
+    
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v):
+        if v is None:
+            return v
+        return CommonValidators.validate_name(v)
 

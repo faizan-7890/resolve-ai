@@ -2,8 +2,9 @@ import math
 import random
 import hashlib
 import logging
-from openai import OpenAI
+from openai import OpenAI, APIConnectionError, APITimeoutError, RateLimitError, APIError
 from app.core.config import settings
+from app.core.exceptions import EmbeddingServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ def get_embeddings(text: str, dimensions: int = 128) -> list[float]:
     """
     Generates embeddings for the provided text.
     Attempts to use NVIDIA NIM if credentials are present, falling back to local deterministic embedding.
+    
+    Raises:
+        EmbeddingServiceError: If external service fails and fallback is insufficient
     """
     if not settings.NVIDIA_NIM_API_KEY:
         logger.info("NVIDIA_NIM_API_KEY not configured. Using local deterministic embeddings.")
@@ -71,6 +75,12 @@ def get_embeddings(text: str, dimensions: int = 128) -> list[float]:
                 padded = [x / magnitude for x in padded]
             return padded
             
-    except Exception as e:
-        logger.warning(f"Error calling NVIDIA NIM embedding API: {e}. Falling back to local deterministic embeddings.")
+    except (APIConnectionError, APITimeoutError) as e:
+        logger.warning(f"Embedding service connection error: {e}. Falling back to local embeddings.")
         return generate_local_deterministic_embedding(text, dimensions)
+    except RateLimitError as e:
+        logger.warning(f"Embedding service rate limited: {e}. Falling back to local embeddings.")
+        return generate_local_deterministic_embedding(text, dimensions)
+    except APIError as e:
+        logger.error(f"Embedding service API error: {e}")
+        raise EmbeddingServiceError(f"Failed to generate embeddings: {str(e)}")

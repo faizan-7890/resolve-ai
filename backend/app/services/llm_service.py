@@ -1,13 +1,17 @@
 import json
 import logging
-from openai import OpenAI
+from openai import OpenAI, APIConnectionError, APITimeoutError, RateLimitError, APIError
 from app.core.config import settings
+from app.core.exceptions import LLMServiceError
 
 logger = logging.getLogger(__name__)
 
 def generate_llm_response(system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
     """
     Sends a prompt to the LLM (NVIDIA NIM) or falls back to mock responses.
+    
+    Raises:
+        LLMServiceError: If external service fails and fallback is insufficient
     """
     if not settings.NVIDIA_NIM_API_KEY:
         logger.info("NVIDIA_NIM_API_KEY not configured. Using local rule-based fallback response.")
@@ -36,9 +40,15 @@ def generate_llm_response(system_prompt: str, user_prompt: str, json_mode: bool 
         
         return response.choices[0].message.content.strip()
         
-    except Exception as e:
-        logger.warning(f"Error calling NVIDIA NIM LLM API: {e}. Falling back to rule-based mock responses.")
+    except (APIConnectionError, APITimeoutError) as e:
+        logger.warning(f"LLM service connection error: {e}. Falling back to rule-based mock responses.")
         return _local_mock_llm_response(system_prompt, user_prompt, json_mode)
+    except RateLimitError as e:
+        logger.warning(f"LLM service rate limited: {e}. Falling back to rule-based mock responses.")
+        return _local_mock_llm_response(system_prompt, user_prompt, json_mode)
+    except APIError as e:
+        logger.error(f"LLM service API error: {e}")
+        raise LLMServiceError(f"Failed to generate LLM response: {str(e)}")
 
 def _local_mock_llm_response(system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
     """
