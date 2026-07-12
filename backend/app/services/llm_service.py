@@ -83,7 +83,7 @@ def _local_mock_llm_response(system_prompt: str, user_prompt: str, json_mode: bo
             
         return json.dumps({
             "decision": decision,
-            "content": content
+            "rationale": content
         })
 
     # 2. General text responses

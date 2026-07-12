@@ -240,7 +240,7 @@ def submit_clarification_response(
         
     question = (
         db.query(ClarificationQuestion)
-        .filter(ClarificationQuestion.ticket_id == ticket_id, ClarificationQuestion.answer == None)
+        .filter(ClarificationQuestion.ticket_id == ticket_id, ClarificationQuestion.answer.is_(None))
         .order_by(ClarificationQuestion.asked_at.desc())
         .first()
     )
@@ -279,7 +279,7 @@ def generate_clarification_questions(
         
     pending = db.query(ClarificationQuestion).filter(
         ClarificationQuestion.ticket_id == ticket_id,
-        ClarificationQuestion.answer == None
+        ClarificationQuestion.answer.is_(None)
     ).first()
     
     if not pending:

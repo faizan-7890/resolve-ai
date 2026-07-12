@@ -29,7 +29,7 @@ app.add_middleware(RateLimiter)
 app.include_router(auth.router, prefix="/api")
 app.include_router(ingest.router, prefix="/api")
 app.include_router(tickets.router, prefix="/api/tickets")
-app.include_router(tickets.router, prefix="/api/problems")
+
 app.include_router(query.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
