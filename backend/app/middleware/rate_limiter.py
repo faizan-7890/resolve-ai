@@ -39,10 +39,10 @@ class RateLimiter(BaseHTTPMiddleware):
     
     def __init__(self, app):
         super().__init__(app)
-        # {ip_address: [(timestamp, endpoint), ...]}
-        self.request_history: Dict[str, list[Tuple[float, str]]] = defaultdict(list)
         # {ip_address: {endpoint: token_count}}
         self.token_buckets: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        # {ip_address: {endpoint: last_update_timestamp}}
+        self.last_update: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
     async def dispatch(self, request: Request, call_next):
         """Process request and apply rate limiting"""
@@ -85,41 +85,28 @@ class RateLimiter(BaseHTTPMiddleware):
         """
         current_time = time.time()
         
-        # Clean up old requests outside window
-        self._cleanup_old_requests(client_ip, current_time)
+        # Initialize if client/endpoint is new
+        is_new = (client_ip not in self.token_buckets) or (endpoint not in self.token_buckets[client_ip])
         
-        # Get current token count for this endpoint
-        tokens = self.token_buckets[client_ip][endpoint]
-        
-        # Refill tokens based on elapsed time
-        elapsed = current_time - self._get_last_request_time(client_ip, endpoint)
+        if is_new:
+            self.token_buckets[client_ip][endpoint] = float(limit)
+            self.last_update[client_ip][endpoint] = current_time
+            tokens = float(limit)
+            elapsed = 0.0
+        else:
+            tokens = self.token_buckets[client_ip][endpoint]
+            last_time = self.last_update[client_ip][endpoint]
+            elapsed = max(0.0, current_time - last_time)
+            
         refill_rate = limit / RateLimitConfig.WINDOW_SIZE  # tokens per second
         new_tokens = min(limit, tokens + (elapsed * refill_rate))
         
-        # Check if we have tokens available
         if new_tokens >= 1:
             self.token_buckets[client_ip][endpoint] = new_tokens - 1
-            self.request_history[client_ip].append((current_time, endpoint))
+            self.last_update[client_ip][endpoint] = current_time
             return True
-        
+            
         return False
-
-    def _cleanup_old_requests(self, client_ip: str, current_time: float):
-        """Remove requests outside the rate limit window"""
-        window_start = current_time - RateLimitConfig.WINDOW_SIZE
-        if client_ip in self.request_history:
-            self.request_history[client_ip] = [
-                (ts, endpoint) for ts, endpoint in self.request_history[client_ip]
-                if ts > window_start
-            ]
-
-    def _get_last_request_time(self, client_ip: str, endpoint: str) -> float:
-        """Get timestamp of last request for this endpoint from this IP"""
-        if client_ip in self.request_history:
-            for ts, ep in reversed(self.request_history[client_ip]):
-                if ep == endpoint:
-                    return ts
-        return time.time()
 
     def _get_rate_limit(self, path: str) -> int:
         """Get rate limit for a given endpoint path"""
@@ -134,3 +121,4 @@ class RateLimiter(BaseHTTPMiddleware):
         
         # Return default
         return RateLimitConfig.ENDPOINT_LIMITS["default"]
+
