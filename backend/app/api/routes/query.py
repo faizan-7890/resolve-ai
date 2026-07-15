@@ -151,7 +151,8 @@ def query_or_triage_ticket(
         return {
             "decision": decision,
             "response": response_text,
-            "ticket_id": ticket.id if ticket else None
+            "ticket_id": ticket.id if ticket else None,
+            "retrieved_context": retrieved_chunks
         }
     
     except HTTPException:
@@ -204,9 +205,3 @@ def _logback_resolved_ticket(db: Session, ticket: Ticket, response_text: str) ->
     except Exception as e:
         logger.error(f"Failed to log resolved ticket #{ticket.id} back to KB: {e}")
         db.rollback()
-
-    return {
-        "decision": decision,
-        "response": response_text,
-        "retrieved_context": retrieved_chunks
-    }

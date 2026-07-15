@@ -7,6 +7,7 @@ import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import Workspace from './pages/Workspace';
 import Settings from './pages/Settings';
+import KnowledgeBase from './pages/KnowledgeBase';
 
 // Route guard — redirects to /login if not authenticated
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -101,6 +102,18 @@ const AppRoutes: React.FC = () => {
           <ProtectedRoute>
             <AuthenticatedLayout>
               <Workspace />
+            </AuthenticatedLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Protected: Knowledge Base */}
+      <Route
+        path="/knowledge-base"
+        element={
+          <ProtectedRoute>
+            <AuthenticatedLayout>
+              <KnowledgeBase />
             </AuthenticatedLayout>
           </ProtectedRoute>
         }

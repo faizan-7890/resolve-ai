@@ -32,22 +32,14 @@ class CommonValidators:
         """
         Validate password strength:
         - At least 8 characters
-        - At least one uppercase letter
-        - At least one lowercase letter
         - At least one digit
         """
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters long")
-        
-        if not re.search(r"[A-Z]", password):
-            raise ValueError("Password must contain at least one uppercase letter")
-        
-        if not re.search(r"[a-z]", password):
-            raise ValueError("Password must contain at least one lowercase letter")
-        
+
         if not re.search(r"\d", password):
-            raise ValueError("Password must contain at least one digit")
-        
+            raise ValueError("Password must contain at least one number")
+
         return password
 
     @staticmethod
@@ -61,9 +53,9 @@ class CommonValidators:
         if len(name) > max_length:
             raise ValueError(f"Name cannot exceed {max_length} characters")
         
-        # Allow letters, spaces, hyphens, and apostrophes
-        if not re.match(r"^[a-zA-Z\s\-']+$", name):
-            raise ValueError("Name can only contain letters, spaces, hyphens, and apostrophes")
+        # Allow letters, numbers, spaces, hyphens, and apostrophes
+        if not re.match(r"^[a-zA-Z0-9\s\-']+$", name):
+            raise ValueError("Name can only contain letters, numbers, spaces, hyphens, and apostrophes")
         
         return name
 

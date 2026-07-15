@@ -176,3 +176,51 @@ async def upload_document(
     except Exception as e:
         db.rollback()
         raise exception_to_http_exception(DatabaseError(f"Failed to ingest uploaded file: {str(e)}"))
+
+
+@router.get("/documents", response_model=None)
+def list_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lists all ingested documents in the knowledge base with chunk counts.
+    """
+    documents = db.query(Document).order_by(Document.created_at.desc()).all()
+    return [
+        {
+            "id": doc.id,
+            "title": doc.title,
+            "content": doc.content,
+            "created_at": doc.created_at.isoformat(),
+            "chunks_count": len(doc.chunks)
+        } for doc in documents
+    ]
+
+
+@router.delete("/documents/{document_id}", response_model=None)
+def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes an ingested document. Cascades to remove all associated chunks.
+    Restricted to admin users.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can delete knowledge base documents."
+        )
+
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found."
+        )
+
+    db.delete(doc)
+    db.commit()
+    return {"message": f"Document '{doc.title}' and all associated vector chunks deleted successfully."}

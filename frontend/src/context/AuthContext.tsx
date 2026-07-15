@@ -2,6 +2,23 @@ import React, { createContext, useState, useEffect, useContext, useCallback, use
 
 export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000/api";
 
+/** Parse FastAPI error responses — detail can be a string or an array of validation errors */
+function parseApiError(detail: unknown, fallback: string): string {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    // Pydantic v2 validation error: [{loc, msg, type, input, ...}]
+    return detail
+      .map((e: any) => {
+        const field = Array.isArray(e.loc) ? e.loc.slice(1).join('.') : '';
+        const msg = e.msg || String(e);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join('; ');
+  }
+  return fallback;
+}
+
 interface User {
   id: number;
   email: string;
@@ -106,8 +123,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (!res.ok) {
-      const errData = await res.json();
-      throw new Error(errData.detail || "Invalid login credentials.");
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(parseApiError(errData.detail, "Invalid login credentials."));
     }
 
     const data = await res.json();
@@ -123,8 +140,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (!res.ok) {
-      const errData = await res.json();
-      throw new Error(errData.detail || "Registration failed.");
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(parseApiError(errData.detail, "Registration failed."));
     }
 
     await login(email, password);
@@ -148,8 +165,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (!res.ok) {
-      const errData = await res.json();
-      throw new Error(errData.detail || "Failed to change password.");
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(parseApiError(errData.detail, "Failed to change password."));
     }
   };
 

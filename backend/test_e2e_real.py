@@ -30,7 +30,7 @@ def main():
     })
     if r.status_code == 201:
         p("OK", f"User registered: {r.json()['email']}")
-    elif r.status_code == 400 and "exists" in r.text.lower():
+    elif r.status_code in (400, 409) and "exists" in r.text.lower():
         p("OK", "User already exists, logging in...")
     else:
         p("ERROR", f"Registration failed: {r.status_code} {r.text}")

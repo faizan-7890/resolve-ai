@@ -7,6 +7,18 @@ import {
   AlertTriangle, Folder, PlayCircle, Loader2, ArrowUpRight, Trash2, CheckCircle2,
   BarChart3, PieChart, Target, TrendingUp
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell
+} from 'recharts';
 
 interface Problem {
   id: number;
@@ -23,6 +35,9 @@ interface AnalyticsData {
   category_counts: Record<string, number>;
   task_completion: { total: number; completed: number; rate: number };
   recent_activity: Array<{ title: string; status: string; created_at: string }>;
+  daily_trends?: Array<{ date: string; count: number }>;
+  resolution_times?: Array<{ category: string; avg_time_hours: number; resolved_count: number }>;
+  escalation_stats?: Array<{ category: string; escalation_rate: number; escalated_count: number; total_count: number }>;
 }
 
 
@@ -103,7 +118,7 @@ const Dashboard: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const res = await fetch(`${API_BASE}/problems`, {
+      const res = await fetch(`${API_BASE}/tickets`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -124,7 +139,7 @@ const Dashboard: React.FC = () => {
       showToast('Problem workspace created successfully!', 'success');
       
       // Auto open the newly created workspace
-      onSelectProblem(newProblem.id);
+      navigate(`/tickets/${newProblem.id}`);
     } catch (err: any) {
       setError(err.message || "Something went wrong.");
       showToast(err.message || 'Failed to create workspace.', 'error');
@@ -137,7 +152,7 @@ const Dashboard: React.FC = () => {
     if (!window.confirm("Are you sure you want to delete this problem workspace?")) return;
 
     try {
-      const res = await fetch(`${API_BASE}/problems/${id}`, {
+      const res = await fetch(`${API_BASE}/tickets/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -400,6 +415,109 @@ const Dashboard: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Row 2: Daily Ticket Volume trends */}
+            {analytics.daily_trends && analytics.daily_trends.length > 0 && (
+              <div className="glass-card-static" style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: '300px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <TrendingUp size={16} color="var(--color-primary)" />
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Daily Ticket Volume (Last 30 Days)</span>
+                </div>
+                <div style={{ width: '100%', height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={analytics.daily_trends} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.4}/>
+                          <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis 
+                        dataKey="date" 
+                        stroke="var(--color-text-dark)" 
+                        fontSize={10} 
+                        tickLine={false}
+                        tickFormatter={(str) => {
+                          const parts = str.split('-');
+                          if (parts.length === 3) {
+                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const monthIndex = parseInt(parts[1], 10) - 1;
+                            return `${months[monthIndex]} ${parts[2]}`;
+                          }
+                          return str;
+                        }}
+                      />
+                      <YAxis stroke="var(--color-text-dark)" fontSize={10} tickLine={false} allowDecimals={false} />
+                      <Tooltip 
+                        contentStyle={{ background: '#0a0d1d', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '0.8rem' }} 
+                        labelStyle={{ color: '#fff', fontWeight: 600 }}
+                        itemStyle={{ color: 'var(--color-primary)' }}
+                      />
+                      <Area type="monotone" dataKey="count" name="Tickets" stroke="var(--color-primary)" fillOpacity={1} fill="url(#colorCount)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Row 3: Avg Resolution times & Escalation rate */}
+            {analytics.resolution_times && analytics.resolution_times.length > 0 && (
+              <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: '300px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Briefcase size={16} color="var(--color-secondary)" />
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Avg. Resolution Time (Hours)</span>
+                </div>
+                <div style={{ width: '100%', height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics.resolution_times} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="category" stroke="var(--color-text-dark)" fontSize={10} tickLine={false} tickFormatter={getCategoryLabel} />
+                      <YAxis stroke="var(--color-text-dark)" fontSize={10} tickLine={false} />
+                      <Tooltip 
+                        contentStyle={{ background: '#0a0d1d', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '0.8rem' }}
+                        labelStyle={{ color: '#fff', fontWeight: 600 }}
+                        formatter={(value) => [`${value} hrs`, 'Avg Time']}
+                      />
+                      <Bar dataKey="avg_time_hours" radius={[4, 4, 0, 0]}>
+                        {analytics.resolution_times.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.category] || 'var(--color-secondary)'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {analytics.escalation_stats && analytics.escalation_stats.length > 0 && (
+              <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: '300px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={16} color="var(--color-accent)" />
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Escalation Rate (%)</span>
+                </div>
+                <div style={{ width: '100%', height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics.escalation_stats} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="category" stroke="var(--color-text-dark)" fontSize={10} tickLine={false} tickFormatter={getCategoryLabel} />
+                      <YAxis stroke="var(--color-text-dark)" fontSize={10} tickLine={false} tickFormatter={(val) => `${val}%`} />
+                      <Tooltip 
+                        contentStyle={{ background: '#0a0d1d', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '0.8rem' }}
+                        labelStyle={{ color: '#fff', fontWeight: 600 }}
+                        formatter={(value) => [`${value}%`, 'Escalation Rate']}
+                      />
+                      <Bar dataKey="escalation_rate" radius={[4, 4, 0, 0]}>
+                        {analytics.escalation_stats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.category] || 'var(--color-accent)'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}

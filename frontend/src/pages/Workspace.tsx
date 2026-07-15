@@ -106,7 +106,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
       setAnswers(initialAnswers);
 
       // If in execution or resolved state, load similar cases (RAG memory)
-      if (data.status === 'Execution' || data.status === 'Resolved') {
+      if (data.status === 'Execution' || data.status === 'Resolved' || data.status === 'Open') {
         fetchSimilarCases();
       }
       // Always fetch activity log
@@ -450,7 +450,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
           </div>
 
           {/* RAG memory card on active plan page */}
-          {(problem.status === 'Execution' || problem.status === 'Resolved') && (
+          {(problem.status === 'Execution' || problem.status === 'Resolved' || problem.status === 'Open') && (
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <h3 style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <BookOpen size={16} color="var(--color-accent)" />
@@ -489,7 +489,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
         <div style={{ minHeight: '400px' }}>
           
           {/* STAGE 1: Intake & Clarification */}
-          {(problem.status === 'Intake' || problem.status === 'Clarifying') && (
+          {(problem.status === 'Intake' || problem.status === 'Clarifying' || problem.status === 'Awaiting Clarification') && (
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
                 <div style={{ background: 'rgba(20, 184, 166, 0.1)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-secondary)' }}>
@@ -527,13 +527,13 @@ const Workspace: React.FC<WorkspaceProps> = () => {
                         placeholder="Provide details..."
                         value={answers[q.id] || ''}
                         onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                        disabled={aiLoading || problem.status !== 'Clarifying'}
+                        disabled={aiLoading || (problem.status !== 'Clarifying' && problem.status !== 'Awaiting Clarification')}
                         className="glass-input"
                       />
                     </div>
                   ))}
 
-                  {problem.status === 'Clarifying' && (
+                  {(problem.status === 'Clarifying' || problem.status === 'Awaiting Clarification') && (
                     <button
                       onClick={handleSubmitAnswers}
                       disabled={aiLoading}
@@ -550,7 +550,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
           )}
 
           {/* STAGE 2: Diagnosing */}
-          {problem.status === 'Diagnosing' && (
+          {(problem.status === 'Diagnosing' || problem.status === 'Open') && (
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
                 <div style={{ background: 'rgba(168, 85, 247, 0.1)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-accent)' }}>
@@ -987,6 +987,34 @@ const Workspace: React.FC<WorkspaceProps> = () => {
                 <div style={{ marginBottom: 4 }}><span style={{ color: 'var(--color-primary)' }}>Vector ID: </span> {problemId}</div>
                 <div style={{ marginBottom: 4 }}><span style={{ color: 'var(--color-primary)' }}>Index Name: </span> memories</div>
                 <div><span style={{ color: 'var(--color-primary)' }}>Dimensions: </span> 128 normalized</div>
+              </div>
+
+              <button onClick={() => navigate('/')} className="glass-btn glass-btn-secondary" style={{ marginTop: '1rem' }}>
+                <ArrowLeft size={16} />
+                <span>Return to Dashboard</span>
+              </button>
+            </div>
+          )}
+
+          {/* STAGE: Escalated */}
+          {problem.status === 'Escalated' && (
+            <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', textAlign: 'center', padding: '3rem 2rem' }}>
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#f87171',
+                padding: '1rem',
+                borderRadius: '50%',
+                display: 'inline-flex',
+                boxShadow: '0 0 25px rgba(239, 68, 68, 0.25)'
+              }}>
+                <AlertTriangle size={48} />
+              </div>
+              
+              <div>
+                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff' }}>Ticket Escalated to Human</h2>
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginTop: '0.5rem', maxWidth: '400px' }}>
+                  This ticket has been escalated to a senior support representative. A human agent will contact you via email shortly.
+                </p>
               </div>
 
               <button onClick={() => navigate('/')} className="glass-btn glass-btn-secondary" style={{ marginTop: '1rem' }}>

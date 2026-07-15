@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Layout, Cpu, User, Settings, Menu, X } from 'lucide-react';
+import { LogOut, Layout, Cpu, User, Settings, Menu, X, BookOpen } from 'lucide-react';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -82,6 +82,11 @@ const Header: React.FC = () => {
               <span>Dashboard</span>
             </NavLink>
 
+            <NavLink to="/knowledge-base" style={navLinkStyle}>
+              <BookOpen size={14} />
+              <span>Knowledge Base</span>
+            </NavLink>
+
             <NavLink to="/settings" style={navLinkStyle}>
               <Settings size={14} />
               <span>Settings</span>
@@ -159,6 +164,16 @@ const Header: React.FC = () => {
             <Layout size={14} />
             <span>Dashboard</span>
           </NavLink>
+          <NavLink
+            to="/knowledge-base"
+            onClick={() => setMobileMenuOpen(false)}
+            className="glass-btn glass-btn-secondary"
+            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem', textDecoration: 'none' }}
+          >
+            <BookOpen size={14} />
+            <span>Knowledge Base</span>
+          </NavLink>
+
           <NavLink
             to="/settings"
             onClick={() => setMobileMenuOpen(false)}
