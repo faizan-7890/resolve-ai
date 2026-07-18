@@ -1,6 +1,6 @@
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.models.user import User
 from app.services.retrieval_service import retrieve_similar_chunks
 from app.services.agent_service import run_agent_triage, stream_agent_triage
 from app.services.embedding_service import get_embeddings
+from app.api.routes.ws import manager
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class ClarificationAnswerPayload(BaseModel):
 @router.post("/", response_model=None, status_code=status.HTTP_201_CREATED)
 def create_ticket(
     ticket_in: TicketCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -63,6 +65,11 @@ def create_ticket(
     )
     db.add(log)
     db.commit()
+    
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "ticket_created", "ticket_id": ticket.id, "status": ticket.status}
+    )
     
     return {
         "id": ticket.id,
@@ -205,6 +212,7 @@ def get_ticket_details(
 @router.delete("/{ticket_id}", response_model=None)
 def delete_ticket(
     ticket_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -226,12 +234,18 @@ def delete_ticket(
         
     db.delete(ticket)
     db.commit()
+    
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "ticket_deleted", "ticket_id": ticket_id}
+    )
     return {"message": "Ticket deleted successfully."}
 
 @router.post("/{ticket_id}/clarify", response_model=None)
 def submit_clarification_response(
     ticket_id: int,
     clarification_in: ClarificationResponse,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -275,11 +289,17 @@ def submit_clarification_response(
     db.add(log)
     db.commit()
     
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+    )
+    
     return {"message": "Clarification answer submitted successfully. Ticket status returned to Open."}
 
 @router.post("/{ticket_id}/clarify/generate", response_model=None)
 def generate_clarification_questions(
     ticket_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -319,12 +339,18 @@ def generate_clarification_questions(
         db.add(log)
         db.commit()
         
+        background_tasks.add_task(
+            manager.broadcast,
+            {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+        )
+        
     return {"message": "Clarifications generated successfully."}
 
 @router.post("/{ticket_id}/clarify/answer", response_model=None)
 def answer_clarification_questions(
     ticket_id: int,
     payload: ClarificationAnswerPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -350,11 +376,17 @@ def answer_clarification_questions(
     db.add(log)
     db.commit()
     
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+    )
+    
     return {"message": "Clarifications submitted successfully."}
 
 @router.post("/{ticket_id}/diagnose", response_model=None)
 def run_triage_diagnose_pipeline(
     ticket_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -433,6 +465,11 @@ def run_triage_diagnose_pipeline(
     db.commit()
     db.refresh(ticket)
     
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+    )
+    
     # Return mock diagnosis payload so the frontend visual boards render correctly
     return {
         "id": 1,
@@ -506,6 +543,10 @@ async def stream_triage_diagnose(
                     detail=f"AI Agent escalated ticket: {response_text[:200]}"
                 ))
             db.commit()
+            
+            await manager.broadcast(
+                {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+            )
         except Exception as e:
             logger.error(f"SSE stream: failed to persist triage result for ticket {ticket_id}: {e}")
 

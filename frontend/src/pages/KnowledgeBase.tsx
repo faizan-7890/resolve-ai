@@ -117,7 +117,7 @@ const KnowledgeBase: React.FC = () => {
             <div key={doc.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                  <div style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--color-primary)', padding: '0.5rem', borderRadius: '8px' }}>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'var(--color-primary)', padding: '0.5rem', borderRadius: '8px' }}>
                     <BookOpen size={20} />
                   </div>
                   <div>

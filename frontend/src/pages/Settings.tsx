@@ -364,7 +364,7 @@ const Settings: React.FC = () => {
                         <div key={i} style={{
                           height: '3px', flex: 1, borderRadius: '2px',
                           background: i < strength
-                            ? strength <= 1 ? '#ef4444' : strength <= 2 ? '#f59e0b' : strength <= 3 ? '#6366f1' : '#10b981'
+                            ? strength <= 1 ? '#ef4444' : strength <= 2 ? '#f59e0b' : strength <= 3 ? '#a3a3a3' : '#10b981'
                             : 'rgba(255,255,255,0.1)'
                         }} />
                       );

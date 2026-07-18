@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import Header from './components/Header';
@@ -9,36 +9,24 @@ import Workspace from './pages/Workspace';
 import Settings from './pages/Settings';
 import KnowledgeBase from './pages/KnowledgeBase';
 
-// Route guard — redirects to /login if not authenticated
+const AppBackdrop: React.FC = () => <div className="space-bg" />;
+
+const SessionLoader: React.FC = () => (
+  <div className="session-loader">
+    <div className="loader-ring" />
+    <span>Checking secure session...</span>
+  </div>
+);
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token, loading } = useAuth();
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#060814',
-        color: '#fff',
-        fontFamily: 'sans-serif',
-        gap: '1rem'
-      }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          border: '4px solid rgba(99, 102, 241, 0.1)',
-          borderTopColor: '#6366f1',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }} />
-        <span>Authenticating secure node...</span>
-        <style>{`
-          @keyframes spin { to { transform: rotate(360deg); } }
-        `}</style>
-      </div>
+      <>
+        <AppBackdrop />
+        <SessionLoader />
+      </>
     );
   }
 
@@ -49,12 +37,17 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// Layout wrapper for authenticated pages (includes background + header)
 const AuthenticatedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <>
-    <div className="space-bg" />
-    <div className="glow-orb-1" />
-    <div className="glow-orb-2" />
+    <AppBackdrop />
+    <Header />
+    <main className="app-shell-main">{children}</main>
+  </>
+);
+
+const PublicLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <>
+    <AppBackdrop />
     <Header />
     {children}
   </>
@@ -65,25 +58,19 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      {/* Public: login/register */}
       <Route
         path="/login"
         element={
           token ? (
             <Navigate to="/" replace />
           ) : (
-            <>
-              <div className="space-bg" />
-              <div className="glow-orb-1" />
-              <div className="glow-orb-2" />
-              <Header />
+            <PublicLayout>
               <Auth />
-            </>
+            </PublicLayout>
           )
         }
       />
 
-      {/* Protected: Dashboard */}
       <Route
         path="/"
         element={
@@ -95,7 +82,6 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* Protected: Ticket Workspace */}
       <Route
         path="/tickets/:id"
         element={
@@ -107,7 +93,6 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* Protected: Knowledge Base */}
       <Route
         path="/knowledge-base"
         element={
@@ -119,7 +104,6 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* Protected: Settings */}
       <Route
         path="/settings"
         element={
@@ -131,22 +115,19 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* Catch-all: redirect to home */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <AppRoutes />
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  );
-};
+const App: React.FC = () => (
+  <BrowserRouter>
+    <AuthProvider>
+      <ToastProvider>
+        <AppRoutes />
+      </ToastProvider>
+    </AuthProvider>
+  </BrowserRouter>
+);
 
 export default App;

@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Layout, Cpu, User, Settings, Menu, X, BookOpen } from 'lucide-react';
+import {
+  BookOpen,
+  Cpu,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Settings,
+  User,
+  X,
+} from 'lucide-react';
+
+const navItems = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
+  { to: '/settings', label: 'Settings', icon: Settings },
+];
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -14,194 +29,90 @@ const Header: React.FC = () => {
     setMobileMenuOpen(false);
   };
 
-  const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
-    padding: '0.45rem 0.85rem',
-    fontSize: '0.8rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.35rem',
-    borderRadius: '8px',
-    border: `1px solid ${isActive ? 'var(--color-primary)' : 'var(--border-color)'}`,
-    background: isActive ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
-    color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
-    textDecoration: 'none',
-    transition: 'all 0.2s ease',
-    cursor: 'pointer',
-  });
-
   return (
-    <header style={{
-      borderBottom: '1px solid var(--border-color)',
-      background: 'rgba(6, 8, 20, 0.4)',
-      backdropFilter: 'blur(10px)',
-      position: 'sticky',
-      top: 0,
-      zIndex: 10
-    }}>
-      <div style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        padding: '1rem 1.5rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        {/* Logo */}
-        <NavLink
-          to="/"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}
-        >
-          <div style={{
-            background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%)',
-            padding: '0.5rem',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 15px rgba(99, 102, 241, 0.3)'
-          }}>
-            <Cpu size={20} color="#fff" />
-          </div>
-          <span style={{
-            fontFamily: 'var(--font-title)',
-            fontSize: '1.4rem',
-            fontWeight: 700,
-            background: 'linear-gradient(to right, #ffffff, #c7d2fe)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
-          }}>
-            ResolveAI
+    <header className="app-header">
+      <div className="header-shell">
+        <NavLink to="/" className="brand-link" aria-label="ResolveAI dashboard">
+          <span className="brand-mark">
+            <Cpu size={19} />
+          </span>
+          <span className="brand-copy">
+            <span className="brand-name">ResolveAI</span>
+            <span className="brand-subtitle">Support operations</span>
           </span>
         </NavLink>
 
-        {/* Desktop Nav */}
         {user ? (
-          <div className="header-desktop-nav" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <NavLink to="/" style={navLinkStyle} end>
-              <Layout size={14} />
-              <span>Dashboard</span>
-            </NavLink>
+          <>
+            <nav className="header-desktop-nav" aria-label="Primary navigation">
+              {navItems.map(({ to, label, icon: Icon, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
+                >
+                  <Icon size={15} />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </nav>
 
-            <NavLink to="/knowledge-base" style={navLinkStyle}>
-              <BookOpen size={14} />
-              <span>Knowledge Base</span>
-            </NavLink>
+            <div className="header-actions">
+              <div className="user-chip" title={user.email}>
+                <User size={14} />
+                <span>{user.name || user.email}</span>
+              </div>
 
-            <NavLink to="/settings" style={navLinkStyle}>
-              <Settings size={14} />
-              <span>Settings</span>
-            </NavLink>
-
-            <div style={{
-              width: '1px',
-              height: '24px',
-              background: 'var(--border-color)',
-              margin: '0 0.25rem'
-            }} />
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-              <User size={14} />
-              <span>{user.name || user.email}</span>
+              <button onClick={handleLogout} className="glass-btn glass-btn-secondary header-logout">
+                <LogOut size={15} />
+                <span>Log out</span>
+              </button>
             </div>
 
             <button
-              onClick={handleLogout}
-              className="glass-btn glass-btn-secondary"
-              style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              className="header-mobile-toggle"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
             >
-              <LogOut size={14} />
-              <span>Log out</span>
+              {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
-          </div>
+          </>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-            <Layout size={16} />
-            <span>AI Support Ticket Resolver</span>
+          <div className="guest-status">
+            <span className="status-dot" />
+            <span>AI support ticket resolver</span>
           </div>
-        )}
-
-        {/* Mobile Hamburger */}
-        {user && (
-          <button
-            className="header-mobile-toggle"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={{
-              display: 'none',
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-text-main)',
-              cursor: 'pointer',
-              padding: '0.25rem'
-            }}
-          >
-            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
         )}
       </div>
 
-      {/* Mobile Menu Dropdown */}
       {user && mobileMenuOpen && (
-        <div className="header-mobile-menu" style={{
-          padding: '0.75rem 1.5rem 1.25rem',
-          display: 'none',
-          flexDirection: 'column',
-          gap: '0.5rem',
-          borderTop: '1px solid var(--border-color)',
-          background: 'rgba(6, 8, 20, 0.95)',
-          backdropFilter: 'blur(16px)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-muted)', fontSize: '0.85rem', padding: '0.5rem 0' }}>
+        <div className="header-mobile-menu">
+          <div className="mobile-user">
             <User size={14} />
             <span>{user.name || user.email}</span>
           </div>
-          <NavLink
-            to="/"
-            onClick={() => setMobileMenuOpen(false)}
-            className="glass-btn glass-btn-secondary"
-            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem', textDecoration: 'none' }}
-            end
-          >
-            <Layout size={14} />
-            <span>Dashboard</span>
-          </NavLink>
-          <NavLink
-            to="/knowledge-base"
-            onClick={() => setMobileMenuOpen(false)}
-            className="glass-btn glass-btn-secondary"
-            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem', textDecoration: 'none' }}
-          >
-            <BookOpen size={14} />
-            <span>Knowledge Base</span>
-          </NavLink>
 
-          <NavLink
-            to="/settings"
-            onClick={() => setMobileMenuOpen(false)}
-            className="glass-btn glass-btn-secondary"
-            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem', textDecoration: 'none' }}
-          >
-            <Settings size={14} />
-            <span>Settings</span>
-          </NavLink>
-          <button
-            onClick={handleLogout}
-            className="glass-btn glass-btn-danger"
-            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.6rem 0.85rem', fontSize: '0.85rem' }}
-          >
-            <LogOut size={14} />
+          {navItems.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              onClick={() => setMobileMenuOpen(false)}
+              className={({ isActive }) => `mobile-nav-link ${isActive ? 'mobile-nav-link-active' : ''}`}
+            >
+              <Icon size={15} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+
+          <button onClick={handleLogout} className="glass-btn glass-btn-danger mobile-logout">
+            <LogOut size={15} />
             <span>Log out</span>
           </button>
         </div>
       )}
-
-      {/* Responsive CSS */}
-      <style>{`
-        @media (max-width: 768px) {
-          .header-desktop-nav { display: none !important; }
-          .header-mobile-toggle { display: flex !important; }
-          .header-mobile-menu { display: flex !important; }
-        }
-      `}</style>
     </header>
   );
 };

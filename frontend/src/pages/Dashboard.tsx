@@ -42,19 +42,19 @@ interface AnalyticsData {
 
 
 const STATUS_COLORS: Record<string, string> = {
-  'Intake': '#6366f1',
-  'Clarifying': '#a855f7',
+  'Intake': '#e5e5e5',
+  'Clarifying': '#a3a3a3',
   'Diagnosing': '#f59e0b',
-  'Planning': '#3b82f6',
-  'Execution': '#14b8a6',
+  'Planning': '#d4d4d4',
+  'Execution': '#737373',
   'Resolved': '#10b981',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'General': '#6366f1',
-  'Career': '#3b82f6',
-  'Academic': '#a855f7',
-  'Business': '#14b8a6',
+  'General': '#e5e5e5',
+  'Career': '#d4d4d4',
+  'Academic': '#a3a3a3',
+  'Business': '#737373',
   'Personal': '#f59e0b',
 };
 
@@ -208,7 +208,7 @@ const Dashboard: React.FC = () => {
       case 'Awaiting Clarification':
         return <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}><Loader2 size={12} className="pulse-dots" /> Clarification Needed</span>;
       default:
-        return <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', border: '1px solid rgba(99, 102, 241, 0.25)', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}><PlayCircle size={12} /> Open</span>;
+        return <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#e5e5e5', border: '1px solid rgba(255, 255, 255, 0.2)', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}><PlayCircle size={12} /> Open</span>;
     }
   };
 
@@ -237,7 +237,7 @@ const Dashboard: React.FC = () => {
             const dashLength = circumference * pct;
             const dashOffset = circumference * currentOffset;
             currentOffset += pct;
-            const color = STATUS_COLORS[key] || '#6366f1';
+            const color = STATUS_COLORS[key] || '#e5e5e5';
             return (
               <circle
                 key={key}
@@ -266,7 +266,7 @@ const Dashboard: React.FC = () => {
           {Object.entries(data).map(([key, value]) => (
             value > 0 && (
               <div key={key} className="chart-legend-item">
-                <div className="chart-legend-dot" style={{ background: STATUS_COLORS[key] || '#6366f1' }} />
+                <div className="chart-legend-dot" style={{ background: STATUS_COLORS[key] || '#e5e5e5' }} />
                 <span>{key} ({value})</span>
               </div>
             )
@@ -389,7 +389,7 @@ const Dashboard: React.FC = () => {
                           className="bar-chart-fill" 
                           style={{ 
                             width: `${Math.max(pct, 8)}%`, 
-                            background: `linear-gradient(90deg, ${CATEGORY_COLORS[cat] || '#6366f1'}, ${CATEGORY_COLORS[cat] || '#6366f1'}88)` 
+                            background: `linear-gradient(90deg, ${CATEGORY_COLORS[cat] || '#e5e5e5'}, ${CATEGORY_COLORS[cat] || '#e5e5e5'}88)` 
                           }}
                         >
                           {count}
@@ -581,7 +581,7 @@ const Dashboard: React.FC = () => {
                   value={category} 
                   onChange={(e) => setCategory(e.target.value)} 
                   className="glass-input"
-                  style={{ background: '#060814' }}
+                  style={{ background: '#000000' }}
                 >
                   <option value="General">General Inquiry</option>
                   <option value="Career">Technical Support</option>
@@ -597,7 +597,7 @@ const Dashboard: React.FC = () => {
                   value={urgency} 
                   onChange={(e) => setUrgency(e.target.value)} 
                   className="glass-input"
-                  style={{ background: '#060814' }}
+                  style={{ background: '#000000' }}
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>

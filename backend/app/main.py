@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.middleware.rate_limiter import RateLimiter
-from app.api.routes import auth, ingest, tickets, query, analytics, settings as settings_router
+from app.api.routes import auth, ingest, tickets, query, analytics, settings as settings_router, ws
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ app.add_middleware(RateLimiter)
 app.include_router(auth.router, prefix="/api")
 app.include_router(ingest.router, prefix="/api")
 app.include_router(tickets.router, prefix="/api/tickets")
+app.include_router(ws.router, prefix="/api")
 
 app.include_router(query.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")

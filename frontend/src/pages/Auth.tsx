@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Cpu, Mail, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Cpu,
+  Lock,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  User,
+} from 'lucide-react';
 
 const Auth: React.FC = () => {
   const { login, register } = useAuth();
@@ -23,151 +33,142 @@ const Auth: React.FC = () => {
         await register(email, name, password);
       }
     } catch (err: any) {
-      setError(err.message || "An authentication error occurred. Please try again.");
+      setError(err.message || 'An authentication error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const switchMode = () => {
+    setIsLogin((current) => !current);
+    setError(null);
+  };
+
   return (
-    <div style={{
-      minHeight: 'calc(100vh - 70px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem 1.5rem'
-    }} className="animate-fade-in">
-      <div style={{ width: '100%', maxWidth: '440px' }} className="glass-card">
-        {/* Brand Header */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%)',
-            padding: '0.75rem',
-            borderRadius: '12px',
-            marginBottom: '1rem',
-            boxShadow: '0 0 20px rgba(99, 102, 241, 0.4)'
-          }}>
-            <Cpu size={28} color="#fff" />
-          </div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-            {isLogin ? "Welcome back" : "Create your account"}
-          </h2>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-            {isLogin ? "Log in to access your problem workspace" : "Get started with ResolveAI workspace"}
+    <main className="auth-page animate-fade-in">
+      <section className="auth-shell">
+        <aside className="auth-side">
+          <span className="eyebrow">
+            <Sparkles size={14} />
+            AI support command center
+          </span>
+          <h1>Resolve support tickets with traceable AI triage.</h1>
+          <p>
+            Route, diagnose, draft, and document every support case from one calm
+            operations workspace.
           </p>
-        </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-            borderRadius: '10px',
-            padding: '0.75rem 1rem',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.5rem',
-            marginBottom: '1.5rem',
-            color: '#fca5a5',
-            fontSize: '0.85rem'
-          }}>
-            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
-            <span>{error}</span>
+          <div className="auth-metrics" aria-label="ResolveAI capabilities">
+            <div>
+              <strong>RAG</strong>
+              <span>policy-aware answers</span>
+            </div>
+            <div>
+              <strong>SSE</strong>
+              <span>live triage progress</span>
+            </div>
+            <div>
+              <strong>JWT</strong>
+              <span>secure sessions</span>
+            </div>
           </div>
-        )}
 
-        {/* Auth Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {!isLogin && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Name</label>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dark)' }}>
-                  <User size={18} />
-                </span>
-                <input
-                  type="text"
-                  required
-                  placeholder="Your full name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="glass-input"
-                  style={{ paddingLeft: '2.75rem' }}
-                />
-              </div>
+          <ul className="auth-feature-list">
+            <li>
+              <CheckCircle2 size={16} />
+              AI clarifier, evaluator, writer, and auditor workflow
+            </li>
+            <li>
+              <CheckCircle2 size={16} />
+              Knowledge base ingestion with vector search memory
+            </li>
+            <li>
+              <CheckCircle2 size={16} />
+              Exportable ticket reports for support handoffs
+            </li>
+          </ul>
+        </aside>
+
+        <div className="auth-card glass-card-static">
+          <div className="auth-card-header">
+            <div className="brand-mark auth-brand-mark">
+              <Cpu size={24} />
+            </div>
+            <div>
+              <h2>{isLogin ? 'Welcome back' : 'Create your account'}</h2>
+              <p>{isLogin ? 'Sign in to your support workspace.' : 'Start a ResolveAI workspace.'}</p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="form-alert" role="alert">
+              <AlertCircle size={16} />
+              <span>{error}</span>
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Email Address</label>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dark)' }}>
+          <form onSubmit={handleSubmit} className="auth-form">
+            {!isLogin && (
+              <label className="form-field">
+                <span>Name</span>
+                <span className="input-shell">
+                  <User size={18} />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Your full name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="glass-input"
+                  />
+                </span>
+              </label>
+            )}
+
+            <label className="form-field">
+              <span>Email Address</span>
+              <span className="input-shell">
                 <Mail size={18} />
+                <input
+                  type="email"
+                  required
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="glass-input"
+                />
               </span>
-              <input
-                type="email"
-                required
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="glass-input"
-                style={{ paddingLeft: '2.75rem' }}
-              />
-            </div>
-          </div>
+            </label>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-muted)' }}>Password</label>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dark)' }}>
+            <label className="form-field">
+              <span>Password</span>
+              <span className="input-shell">
                 <Lock size={18} />
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="glass-input"
+                />
               </span>
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="glass-input"
-                style={{ paddingLeft: '2.75rem' }}
-              />
-            </div>
+            </label>
+
+            <button type="submit" disabled={loading} className="glass-btn glass-btn-primary auth-submit">
+              <span>{loading ? 'Authenticating...' : isLogin ? 'Sign in' : 'Create account'}</span>
+              {!loading && <ArrowRight size={16} />}
+            </button>
+          </form>
+
+          <div className="auth-switch">
+            <ShieldCheck size={15} />
+            <span>{isLogin ? "Don't have an account?" : 'Already have an account?'}</span>
+            <button onClick={switchMode}>{isLogin ? 'Sign up' : 'Log in'}</button>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="glass-btn glass-btn-primary"
-            style={{ marginTop: '0.5rem', width: '100%' }}
-          >
-            <span>{loading ? "Authenticating..." : (isLogin ? "Sign In" : "Register")}</span>
-            {!loading && <ArrowRight size={16} />}
-          </button>
-        </form>
-
-        {/* Toggle link */}
-        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError(null);
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-secondary)',
-              cursor: 'pointer',
-              fontWeight: 600,
-              padding: 0
-            }}
-          >
-            {isLogin ? "Sign Up" : "Log In"}
-          </button>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };
 

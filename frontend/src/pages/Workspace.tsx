@@ -426,9 +426,9 @@ const Workspace: React.FC<WorkspaceProps> = () => {
 
           {/* Global Agent Button Indicator */}
           {aiLoading && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(99, 102, 241, 0.15)', padding: '0.5rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color-glow)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.08)', padding: '0.5rem 1rem', borderRadius: '10px', border: '1px solid var(--border-color-glow)' }}>
               <Loader2 size={16} className="pulse-dots" style={{ color: 'var(--color-primary)' }} />
-              <span style={{ fontSize: '0.85rem', color: '#c7d2fe', fontWeight: 600 }}>Agents Orchestrating...</span>
+              <span style={{ fontSize: '0.85rem', color: '#e5e5e5', fontWeight: 600 }}>Agents Orchestrating...</span>
             </div>
           )}
         </div>
@@ -492,7 +492,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
           {(problem.status === 'Intake' || problem.status === 'Clarifying' || problem.status === 'Awaiting Clarification') && (
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <div style={{ background: 'rgba(20, 184, 166, 0.1)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-secondary)' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.06)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-secondary)' }}>
                   <HelpCircle size={24} />
                 </div>
                 <div>
@@ -553,7 +553,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
           {(problem.status === 'Diagnosing' || problem.status === 'Open') && (
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <div style={{ background: 'rgba(168, 85, 247, 0.1)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-accent)' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-accent)' }}>
                   <Layers size={24} />
                 </div>
                 <div>
@@ -580,8 +580,8 @@ const Workspace: React.FC<WorkspaceProps> = () => {
                   {agentSteps.length > 0 && (
                     <div style={{
                       marginTop: '1.25rem',
-                      background: 'rgba(6, 8, 20, 0.6)',
-                      border: '1px solid rgba(99, 102, 241, 0.2)',
+                      background: 'rgba(0, 0, 0, 0.6)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
                       borderRadius: '12px',
                       padding: '1rem 1.25rem',
                       display: 'flex',
@@ -729,7 +729,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
           {problem.status === 'Planning' && (
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-primary)' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-primary)' }}>
                   <Award size={24} />
                 </div>
                 <div>
@@ -855,7 +855,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
             <div className="glass-card-static" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1fr' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                  <div style={{ background: 'rgba(20, 184, 166, 0.1)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-secondary)' }}>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.06)', padding: '0.625rem', borderRadius: '10px', color: 'var(--color-secondary)' }}>
                     <ListTodo size={24} />
                   </div>
                   <div>
