@@ -286,15 +286,14 @@ The triage pipeline is a 5-node `StateGraph` compiled with LangGraph:
 
 ## 🔧 Scripts & Utilities
 
+Run from `backend/`:
+
 ```bash
 # Seed the knowledge base with initial policy documents
-python scripts/seed_documents.py
+python scripts/seed_docs.py
 
-# Verify RAG retrieval is working correctly
-python verify_rag.py
-
-# Run end-to-end integration tests
-python test_e2e_real.py
+# Run end-to-end smoke test against a running server
+python scripts/e2e_smoke.py
 ```
 
 ---
