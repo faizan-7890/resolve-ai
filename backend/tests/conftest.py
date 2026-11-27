@@ -3,6 +3,13 @@ Pytest fixtures for ResolveAI backend tests.
 Uses an in-memory SQLite database (with StaticPool) so no local DB files or PostgreSQL server are required.
 """
 import os
+from pathlib import Path
+import sys
+
+# Ensure backend root is importable when invoking `pytest` directly (e.g. in CI)
+BACKEND_ROOT = str(Path(__file__).resolve().parents[1])
+if BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, BACKEND_ROOT)
 
 # Provide deterministic test defaults before importing app settings/main
 os.environ.setdefault("SECRET_KEY", "ci-test-secret-key-not-for-production")
