@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth, API_BASE } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-  Search, Trash2, Eye, BookOpen, Clock, Loader2, X, AlertTriangle
+  Search, Trash2, Eye, BookOpen, Clock, Loader2, X, AlertTriangle, Upload, FileText
 } from 'lucide-react';
 
 interface Document {
@@ -22,6 +22,10 @@ const KnowledgeBase: React.FC = () => {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState<boolean>(false);
+  const [uploadOpen, setUploadOpen] = useState<boolean>(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocuments = async () => {
     try {
@@ -64,6 +68,35 @@ const KnowledgeBase: React.FC = () => {
     }
   };
 
+  const ACCEPTED_TYPES = ['.pdf', '.docx', '.txt', '.md', '.csv', '.log'];
+
+  const handleUploadFile = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      const res = await fetch(`${API_BASE}/ingest/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Upload failed.');
+      }
+      const data = await res.json();
+      showToast(`"${data.document_title}" ingested (${data.chunks_count} chunks)`, 'success');
+      setUploadFile(null);
+      setUploadOpen(false);
+      await fetchDocuments();
+    } catch (err: any) {
+      showToast(err.message || 'Could not upload document.', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const filteredDocs = documents.filter(doc =>
     doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     doc.content.toLowerCase().includes(searchQuery.toLowerCase())
@@ -83,7 +116,7 @@ const KnowledgeBase: React.FC = () => {
       </div>
 
       {/* Control bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
           <Search size={18} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dark)' }} />
           <input
@@ -95,6 +128,15 @@ const KnowledgeBase: React.FC = () => {
             style={{ paddingLeft: '2.5rem', width: '100%' }}
           />
         </div>
+
+        <button
+          onClick={() => setUploadOpen(true)}
+          className="glass-btn glass-btn-primary"
+          style={{ padding: '0.65rem 1.15rem', fontSize: '0.875rem' }}
+        >
+          <Upload size={16} />
+          <span>Upload Document</span>
+        </button>
       </div>
 
       {/* Main Content Area */}
@@ -312,6 +354,99 @@ const KnowledgeBase: React.FC = () => {
                     <span>Delete Permanently</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Document Dialog */}
+      {uploadOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+          padding: '1rem'
+        }}>
+          <div className="glass-card-static animate-fade-in" style={{
+            maxWidth: '480px',
+            width: '100%',
+            padding: '1.75rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => { setUploadOpen(false); setUploadFile(null); }}
+              style={{ position: 'absolute', right: '1.25rem', top: '1.25rem', background: 'none', border: 'none', color: 'var(--color-text-dark)', cursor: 'pointer' }}
+            >
+              <X size={20} />
+            </button>
+
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>Upload Knowledge Base Document</h3>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
+                Supports PDF, DOCX, TXT, MD, CSV, and LOG files up to 10 MB.
+              </p>
+            </div>
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${uploadFile ? '#10b981' : 'var(--border-color)'}`,
+                borderRadius: '12px',
+                padding: '1.75rem',
+                textAlign: 'center',
+                cursor: 'pointer',
+                background: uploadFile ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.02)',
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES.join(',')}
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) setUploadFile(f);
+                  e.target.value = '';
+                }}
+              />
+              {uploadFile ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
+                  <FileText size={20} color="#10b981" />
+                  <span style={{ color: '#d1fae5', fontWeight: 600, fontSize: '0.9rem' }}>{uploadFile.name}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', color: 'var(--color-text-muted)' }}>
+                  <Upload size={24} />
+                  <span style={{ fontSize: '0.875rem' }}>Click to select a file</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => { setUploadOpen(false); setUploadFile(null); }}
+                disabled={uploading}
+                className="glass-btn glass-btn-secondary"
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUploadFile}
+                disabled={!uploadFile || uploading}
+                className="glass-btn glass-btn-primary"
+                style={{ flex: 1 }}
+              >
+                {uploading ? <><Loader2 size={14} className="pulse-dots" /><span>Uploading...</span></> : <span>Ingest File</span>}
               </button>
             </div>
           </div>
