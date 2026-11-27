@@ -1,23 +1,27 @@
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from fastapi.responses import Response, StreamingResponse
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+import math
 from typing import List, Optional
-from app.core.database import get_db
-from app.models.ticket import Ticket, ClarificationQuestion, TicketActivityLog
-from app.models.document import Document, DocumentChunk
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
-from app.models.user import User
-from app.services.retrieval_service import retrieve_similar_chunks
-from app.services.agent_service import run_agent_triage, stream_agent_triage
-from app.services.embedding_service import get_embeddings
 from app.api.routes.ws import manager
+from app.core.config import settings
+from app.core.database import get_db
+from app.models.document import Document, DocumentChunk
+from app.models.ticket import ClarificationQuestion, Ticket, TicketActivityLog
+from app.models.user import User
+from app.services.agent_service import run_agent_triage, stream_agent_triage
+from app.services.chunking import chunk_text
+from app.services.embedding_service import get_embeddings
+from app.services.retrieval_service import retrieve_similar_chunks
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["tickets"])
+
 
 class TicketCreate(BaseModel):
     title: str
@@ -25,52 +29,37 @@ class TicketCreate(BaseModel):
     category: Optional[str] = "General"
     urgency: Optional[str] = "Medium"
 
+
 class ClarificationResponse(BaseModel):
     answer: str
+
 
 class AnswerItem(BaseModel):
     clarification_id: int
     answer: str
 
+
 class ClarificationAnswerPayload(BaseModel):
     answers: List[AnswerItem]
 
-@router.post("/", response_model=None, status_code=status.HTTP_201_CREATED)
-def create_ticket(
-    ticket_in: TicketCreate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Submits a new customer support ticket and logs the intake activity.
-    """
-    ticket = Ticket(
-        user_id=current_user.id,
-        title=ticket_in.title,
-        description=ticket_in.description,
-        category=ticket_in.category,
-        urgency=ticket_in.urgency,
-        status="Open"
-    )
-    db.add(ticket)
-    db.commit()
-    db.refresh(ticket)
-    
-    # Add activity log
-    log = TicketActivityLog(
-        ticket_id=ticket.id,
-        action="Created",
-        detail=f"Ticket intake registered successfully for user {current_user.email}."
-    )
-    db.add(log)
-    db.commit()
-    
-    background_tasks.add_task(
-        manager.broadcast,
-        {"type": "ticket_created", "ticket_id": ticket.id, "status": ticket.status}
-    )
-    
+
+def _get_authorized_ticket(ticket_id: int, db: Session, current_user: User) -> Ticket:
+    """Fetch a ticket and verify the current user owns it or is an admin."""
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found.",
+        )
+    if current_user.role != "admin" and ticket.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this ticket.",
+        )
+    return ticket
+
+
+def _serialize_ticket_summary(ticket: Ticket) -> dict:
     return {
         "id": ticket.id,
         "title": ticket.title,
@@ -78,19 +67,117 @@ def create_ticket(
         "category": ticket.category,
         "urgency": ticket.urgency,
         "status": ticket.status,
-        "created_at": ticket.created_at
+        "created_at": ticket.created_at,
     }
+
+
+def _logback_ticket_resolution(db: Session, ticket: Ticket, response_text: str) -> None:
+    """Index resolved ticket content and resolution back into the knowledge base."""
+    try:
+        kb_title = f"Resolved Ticket #{ticket.id}: {ticket.title}"
+        kb_content = (
+            f"Customer Ticket Description:\n{ticket.description}\n\n"
+            f"Resolution:\n{response_text}"
+        )
+        kb_doc = Document(title=kb_title, content=kb_content)
+        db.add(kb_doc)
+        db.flush()
+
+        chunks = chunk_text(
+            kb_content,
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP,
+        )
+        for chunk_content in chunks:
+            embedding = get_embeddings(chunk_content)
+            db.add(DocumentChunk(
+                document_id=kb_doc.id,
+                content=chunk_content,
+                embedding=embedding,
+            ))
+    except Exception as exc:
+        logger.error("Failed to log ticket #%s back to KB: %s", ticket.id, exc)
+
+
+def _apply_triage_outcome(db: Session, ticket: Ticket, decision: str, response_text: str) -> None:
+    """Persist triage decision, logs, clarifications, and KB logback for a ticket."""
+    if decision == "Answer":
+        ticket.resolution = response_text
+        ticket.status = "Resolved"
+        db.add(TicketActivityLog(
+            ticket_id=ticket.id,
+            action="Resolved",
+            detail=f"AI Agent resolved ticket. Response: {response_text}",
+        ))
+        _logback_ticket_resolution(db, ticket, response_text)
+    elif decision == "Clarify":
+        ticket.status = "Awaiting Clarification"
+        db.add(ClarificationQuestion(ticket_id=ticket.id, question=response_text))
+        db.add(TicketActivityLog(
+            ticket_id=ticket.id,
+            action="Awaiting Clarification",
+            detail=f"AI Agent requested clarification: {response_text}",
+        ))
+    elif decision == "Escalate":
+        ticket.status = "Escalated"
+        db.add(TicketActivityLog(
+            ticket_id=ticket.id,
+            action="Escalated",
+            detail=f"AI Agent escalated ticket. Reason: {response_text}",
+        ))
+
+
+@router.post("/", response_model=None, status_code=status.HTTP_201_CREATED)
+def create_ticket(
+    ticket_in: TicketCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Submit a new customer support ticket and log intake activity."""
+    ticket = Ticket(
+        user_id=current_user.id,
+        title=ticket_in.title,
+        description=ticket_in.description,
+        category=ticket_in.category,
+        urgency=ticket_in.urgency,
+        status="Open",
+    )
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+
+    log = TicketActivityLog(
+        ticket_id=ticket.id,
+        action="Created",
+        detail=f"Ticket intake registered successfully for user {current_user.email}.",
+    )
+    db.add(log)
+    db.commit()
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {"type": "ticket_created", "ticket_id": ticket.id, "status": ticket.status},
+        owner_id=ticket.user_id,
+    )
+
+    return _serialize_ticket_summary(ticket)
+
 
 @router.get("/", response_model=None)
 def list_tickets(
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     status: Optional[str] = None,
     search: Optional[str] = None,
+    page: Optional[int] = Query(default=None, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
 ):
     """
-    Lists support tickets. Admins see all tickets, standard users see their own.
-    Supports optional ?status= filter and ?search= keyword search on title/description.
+    Lists support tickets. Admins see all tickets; standard users see their own.
+    Supports optional ?status= filter, ?search= keyword search, and optional ?page=&limit= pagination.
+    Returns a flat list when page is omitted for backward compatibility, or a paginated object when page is provided.
     """
     if current_user.role == "admin":
         query = db.query(Ticket)
@@ -106,43 +193,36 @@ def list_tickets(
             Ticket.title.ilike(search_term) | Ticket.description.ilike(search_term)
         )
 
-    tickets = query.order_by(Ticket.created_at.desc()).all()
+    total = query.count()
+    response.headers["X-Total-Count"] = str(total)
+    ordered_query = query.order_by(Ticket.created_at.desc(), Ticket.id.desc())
 
-    return [
-        {
-            "id": t.id,
-            "title": t.title,
-            "description": t.description,
-            "category": t.category,
-            "urgency": t.urgency,
-            "status": t.status,
-            "created_at": t.created_at
-        } for t in tickets
-    ]
+    if page is None:
+        tickets = ordered_query.all()
+        return [_serialize_ticket_summary(t) for t in tickets]
+
+    offset = (page - 1) * limit
+    tickets = ordered_query.offset(offset).limit(limit).all()
+    pages = max(1, math.ceil(total / limit)) if total > 0 else 1
+
+    return {
+        "items": [_serialize_ticket_summary(t) for t in tickets],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages,
+    }
+
 
 @router.get("/{ticket_id}", response_model=None)
 def get_ticket_details(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Fetches the details of a single ticket including activity logs, clarifications,
-    and mock structures for dashboard compatibility.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found."
-        )
-        
-    if current_user.role != "admin" and ticket.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this ticket."
-        )
-        
+    """Fetch details of a single ticket including logs and clarifications."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
+
     return {
         "id": ticket.id,
         "title": ticket.title,
@@ -158,30 +238,31 @@ def get_ticket_details(
                 "id": c.id,
                 "question": c.question,
                 "answer": c.answer,
-                "asked_at": c.asked_at
-            } for c in ticket.clarifications
+                "asked_at": c.asked_at,
+            }
+            for c in ticket.clarifications
         ],
         "activity_logs": [
             {
                 "id": l.id,
                 "action": l.action,
                 "detail": l.detail,
-                "created_at": l.created_at
-            } for l in ticket.activity_logs
+                "created_at": l.created_at,
+            }
+            for l in ticket.activity_logs
         ],
-        # Compatibility structures for UI pages (SWOT boards and action timelines)
         "diagnoses": [
             {
                 "id": 1,
                 "root_causes": json.dumps(["Retrieval mapping matched", "Ticket routing triage completed"]),
                 "swot_analysis": json.dumps({
-                    "strengths": f"RAG answered ticket with confidence.",
-                    "weaknesses": "RAG limited by knowledge article coverage.",
-                    "opportunities": "Log resolutions back to postgres document store.",
-                    "threats": "NIM endpoint connectivity rate limits."
+                    "strengths": ["RAG answered ticket with confidence."],
+                    "weaknesses": ["RAG limited by knowledge article coverage."],
+                    "opportunities": ["Log resolutions back to postgres document store."],
+                    "threats": ["NIM endpoint connectivity rate limits."],
                 }),
-                "first_principles": json.dumps(["Tickets must evaluate automatically against pgvector doc chunk similarities."]),
-                "created_at": ticket.created_at.isoformat()
+                "first_principles": json.dumps(["Tickets must evaluate automatically against knowledge base similarities."]),
+                "created_at": ticket.created_at.isoformat(),
             }
         ] if ticket.status in ("Resolved", "Escalated") else [],
         "solutions": [
@@ -194,7 +275,7 @@ def get_ticket_details(
                 "confidence": 9.5,
                 "risk": 1.0,
                 "constraints": "Standard corporate escalation guidelines.",
-                "selected": True
+                "selected": True,
             }
         ] if ticket.status == "Resolved" else [],
         "tasks": [
@@ -204,42 +285,33 @@ def get_ticket_details(
                 "status": "Done" if ticket.status == "Resolved" else "Pending",
                 "priority": "High",
                 "timeline": "Immediate",
-                "created_at": ticket.created_at.isoformat()
+                "created_at": ticket.created_at.isoformat(),
             }
-        ]
+        ],
     }
+
 
 @router.delete("/{ticket_id}", response_model=None)
 def delete_ticket(
     ticket_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Deletes a ticket.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found."
-        )
-        
-    if current_user.role != "admin" and ticket.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this ticket."
-        )
-        
+    """Delete a ticket."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
+    owner_id = ticket.user_id
+
     db.delete(ticket)
     db.commit()
-    
+
     background_tasks.add_task(
         manager.broadcast,
-        {"type": "ticket_deleted", "ticket_id": ticket_id}
+        {"type": "ticket_deleted", "ticket_id": ticket_id},
+        owner_id=owner_id,
     )
     return {"message": "Ticket deleted successfully."}
+
 
 @router.post("/{ticket_id}/clarify", response_model=None)
 def submit_clarification_response(
@@ -247,76 +319,59 @@ def submit_clarification_response(
     clarification_in: ClarificationResponse,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Allows customers to submit answers to clarification questions asked by the agent.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found."
-        )
-        
-    if current_user.role != "admin" and ticket.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized."
-        )
-        
+    """Submit answer to the latest pending clarification question."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
+
     question = (
         db.query(ClarificationQuestion)
         .filter(ClarificationQuestion.ticket_id == ticket_id, ClarificationQuestion.answer.is_(None))
         .order_by(ClarificationQuestion.asked_at.desc())
         .first()
     )
-    
+
     if not question:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No pending clarification question was found for this ticket."
+            detail="No pending clarification question was found for this ticket.",
         )
-        
+
     question.answer = clarification_in.answer
     ticket.status = "Open"
-    
-    log = TicketActivityLog(
+
+    db.add(TicketActivityLog(
         ticket_id=ticket.id,
         action="Clarified",
-        detail=f"Customer submitted response to clarification question: {clarification_in.answer}"
-    )
-    db.add(log)
+        detail=f"Customer submitted response to clarification question: {clarification_in.answer}",
+    ))
     db.commit()
-    
+
     background_tasks.add_task(
         manager.broadcast,
-        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status},
+        owner_id=ticket.user_id,
     )
-    
+
     return {"message": "Clarification answer submitted successfully. Ticket status returned to Open."}
+
 
 @router.post("/{ticket_id}/clarify/generate", response_model=None)
 def generate_clarification_questions(
     ticket_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Generates a clarification question for vague queries.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found.")
-        
+    """Generate a clarification question for vague queries."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
+
     pending = db.query(ClarificationQuestion).filter(
         ClarificationQuestion.ticket_id == ticket_id,
-        ClarificationQuestion.answer.is_(None)
+        ClarificationQuestion.answer.is_(None),
     ).first()
-    
+
     if not pending:
-        # Default fallback question or LLM custom generated
         question_text = "Could you please elaborate on your request or specify your account username so we can assist you?"
         try:
             from app.services.llm_service import generate_llm_response
@@ -325,26 +380,26 @@ def generate_clarification_questions(
             question_text = generate_llm_response(system_prompt, user_prompt)
         except Exception:
             pass
-            
+
         pending = ClarificationQuestion(ticket_id=ticket_id, question=question_text)
         db.add(pending)
         ticket.status = "Awaiting Clarification"
-        
-        # Log activity
-        log = TicketActivityLog(
+
+        db.add(TicketActivityLog(
             ticket_id=ticket_id,
             action="Clarification Requested",
-            detail=f"Clarification generated: {question_text}"
-        )
-        db.add(log)
+            detail=f"Clarification generated: {question_text}",
+        ))
         db.commit()
-        
+
         background_tasks.add_task(
             manager.broadcast,
-            {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+            {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status},
+            owner_id=ticket.user_id,
         )
-        
+
     return {"message": "Clarifications generated successfully."}
+
 
 @router.post("/{ticket_id}/clarify/answer", response_model=None)
 def answer_clarification_questions(
@@ -352,135 +407,80 @@ def answer_clarification_questions(
     payload: ClarificationAnswerPayload,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Handles bulk clarification answers sent from React Workspace interface.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found.")
-        
+    """Handle bulk clarification answers sent from React Workspace."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
+
     for item in payload.answers:
-        q = db.query(ClarificationQuestion).filter(ClarificationQuestion.id == item.clarification_id).first()
+        q = (
+            db.query(ClarificationQuestion)
+            .filter(
+                ClarificationQuestion.id == item.clarification_id,
+                ClarificationQuestion.ticket_id == ticket_id,
+            )
+            .first()
+        )
         if q:
             q.answer = item.answer
-            
+
     ticket.status = "Open"
-    
-    log = TicketActivityLog(
+    db.add(TicketActivityLog(
         ticket_id=ticket_id,
         action="Clarified",
-        detail="Customer answered pending clarification questions."
-    )
-    db.add(log)
+        detail="Customer answered pending clarification questions.",
+    ))
     db.commit()
-    
+
     background_tasks.add_task(
         manager.broadcast,
-        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status},
+        owner_id=ticket.user_id,
     )
-    
+
     return {"message": "Clarifications submitted successfully."}
+
 
 @router.post("/{ticket_id}/diagnose", response_model=None)
 def run_triage_diagnose_pipeline(
     ticket_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Executes RAG context retrieval and LangGraph Triage on-demand when "Run AI Diagnosis"
-    is selected in the React frontend.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found.")
-        
+    """Execute RAG context retrieval and synchronous LangGraph triage."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
+
     query_text = f"Title: {ticket.title}\nDescription: {ticket.description}"
-    
-    # Retrieve similar knowledge base chunks
     retrieved_chunks = retrieve_similar_chunks(db, query_text, limit=3)
     context_str = "\n\n".join([c["content"] for c in retrieved_chunks])
-    
-    # Triage via LangGraph
+
     agent_output = run_agent_triage(query_text, context_str)
     decision = agent_output["decision"]
     response_text = agent_output["response"]
-    
-    # Apply updates
-    if decision == "Answer":
-        ticket.resolution = response_text
-        ticket.status = "Resolved"
-        log = TicketActivityLog(
-            ticket_id=ticket.id,
-            action="Resolved",
-            detail=f"AI Agent resolved ticket. Response: {response_text}"
-        )
-        db.add(log)
-        
-        # Save to KB (Logback)
-        try:
-            kb_title = f"Resolved Ticket #{ticket.id}: {ticket.title}"
-            kb_content = f"Customer Ticket Description:\n{ticket.description}\n\nResolution:\n{response_text}"
-            kb_doc = Document(title=kb_title, content=kb_content)
-            db.add(kb_doc)
-            db.commit()
-            db.refresh(kb_doc)
-            
-            from app.services.chunking import chunk_text
-            chunks = chunk_text(kb_content, chunk_size=500, chunk_overlap=100)
-            for c_text in chunks:
-                c_emb = get_embeddings(c_text)
-                c_chunk = DocumentChunk(
-                    document_id=kb_doc.id,
-                    content=c_text,
-                    embedding=c_emb
-                )
-                db.add(c_chunk)
-        except Exception as e:
-            logger.error(f"Failed to log ticket #{ticket.id} back to KB: {e}")
-            
-    elif decision == "Clarify":
-        ticket.status = "Awaiting Clarification"
-        clarification = ClarificationQuestion(ticket_id=ticket.id, question=response_text)
-        db.add(clarification)
-        log = TicketActivityLog(
-            ticket_id=ticket.id,
-            action="Awaiting Clarification",
-            detail=f"AI Agent requested clarification: {response_text}"
-        )
-        db.add(log)
-        
-    elif decision == "Escalate":
-        ticket.status = "Escalated"
-        log = TicketActivityLog(
-            ticket_id=ticket.id,
-            action="Escalated",
-            detail=f"AI Agent escalated ticket. Reason: {response_text}"
-        )
-        db.add(log)
-        
+
+    _apply_triage_outcome(db, ticket, decision, response_text)
     db.commit()
     db.refresh(ticket)
-    
+
     background_tasks.add_task(
         manager.broadcast,
-        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
+        {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status},
+        owner_id=ticket.user_id,
     )
-    
-    # Return mock diagnosis payload so the frontend visual boards render correctly
+
     return {
         "id": 1,
+        "decision": decision,
+        "response": response_text,
         "root_causes": json.dumps(["Automated support evaluation complete."]),
         "swot_analysis": json.dumps({
-            "strengths": "RAG answering logic verified.",
-            "weaknesses": "Dependent on database document contents.",
-            "opportunities": "Feedback loop saves resolved tickets.",
-            "threats": "Empty knowledge base matches."
+            "strengths": ["RAG answering logic verified."],
+            "weaknesses": ["Dependent on database document contents."],
+            "opportunities": ["Feedback loop saves resolved tickets."],
+            "threats": ["Empty knowledge base matches."],
         }),
-        "first_principles": json.dumps(["Support tickets must resolve or route immediately."])
+        "first_principles": json.dumps(["Support tickets must resolve or route immediately."]),
     }
 
 
@@ -488,67 +488,46 @@ def run_triage_diagnose_pipeline(
 async def stream_triage_diagnose(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    SSE (Server-Sent Events) endpoint that streams LangGraph agent node transitions live.
-    Frontend connects via EventSource and receives step-by-step progress events.
-
-    Event format: data: {"step": "evaluator", "status": "running", ...}
+    SSE endpoint that streams LangGraph agent node transitions live
+    and persists the streamed final outcome without re-running the agent.
     """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found.")
-
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
     query_text = f"Title: {ticket.title}\nDescription: {ticket.description}"
 
-    # Retrieve knowledge base context (done once before streaming starts)
     retrieved_chunks = retrieve_similar_chunks(db, query_text, limit=3)
     context_str = "\n\n".join(
         [f"[Doc: {c.get('document_title', 'KB')}] {c['content']}" for c in retrieved_chunks]
     ) or "No relevant knowledge base context found."
 
     async def event_generator():
+        final_decision = None
+        final_response = None
+
         async for event_str in stream_agent_triage(query_text, context_str):
+            if event_str.startswith("data: "):
+                try:
+                    payload = json.loads(event_str[6:].strip())
+                    if payload.get("step") == "complete":
+                        final_decision = payload.get("decision")
+                        final_response = payload.get("response")
+                except json.JSONDecodeError:
+                    pass
             yield event_str
 
-        # After streaming completes, persist the result
-        # Re-run a quick synchronous triage for DB persistence
-        try:
-            agent_output = run_agent_triage(query_text, context_str)
-            decision = agent_output["decision"]
-            response_text = agent_output["response"]
-
-            if decision == "Answer":
-                ticket.resolution = response_text
-                ticket.status = "Resolved"
-                db.add(TicketActivityLog(
-                    ticket_id=ticket.id,
-                    action="Resolved",
-                    detail=f"AI Agent resolved ticket: {response_text[:200]}"
-                ))
-            elif decision == "Clarify":
-                ticket.status = "Awaiting Clarification"
-                db.add(ClarificationQuestion(ticket_id=ticket.id, question=response_text))
-                db.add(TicketActivityLog(
-                    ticket_id=ticket.id,
-                    action="Awaiting Clarification",
-                    detail=f"AI Agent requested clarification: {response_text[:200]}"
-                ))
-            elif decision == "Escalate":
-                ticket.status = "Escalated"
-                db.add(TicketActivityLog(
-                    ticket_id=ticket.id,
-                    action="Escalated",
-                    detail=f"AI Agent escalated ticket: {response_text[:200]}"
-                ))
-            db.commit()
-            
-            await manager.broadcast(
-                {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status}
-            )
-        except Exception as e:
-            logger.error(f"SSE stream: failed to persist triage result for ticket {ticket_id}: {e}")
+        if final_decision and final_response is not None:
+            try:
+                _apply_triage_outcome(db, ticket, final_decision, final_response)
+                db.commit()
+                await manager.broadcast(
+                    {"type": "ticket_updated", "ticket_id": ticket_id, "status": ticket.status},
+                    owner_id=ticket.user_id,
+                )
+            except Exception as exc:
+                db.rollback()
+                logger.error("SSE stream: failed to persist triage result for ticket %s: %s", ticket_id, exc)
 
     return StreamingResponse(
         event_generator(),
@@ -556,7 +535,7 @@ async def stream_triage_diagnose(
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-        }
+        },
     )
 
 
@@ -564,60 +543,50 @@ async def stream_triage_diagnose(
 def get_similar_vector_matches(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Fetches pgvector similarity matches of other resolved tickets/policies.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found.")
-        
+    """Fetch similarity matches of other resolved tickets/policies."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
     similar = retrieve_similar_chunks(db, ticket.description, limit=3)
     return [
         {
             "id": s["id"],
             "similarity": s["score"],
             "problem_summary": s["content"],
-            "solution_summary": f"Source KB document: {s['document_title']}"
-        } for s in similar
+            "solution_summary": f"Source KB document: {s['document_title']}",
+        }
+        for s in similar
     ]
+
 
 @router.get("/{ticket_id}/activity", response_model=None)
 def get_ticket_activity_logs(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Returns audit action logs.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found.")
-        
+    """Return audit action logs for an authorized ticket."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
     return [
         {
             "id": l.id,
             "action": l.action,
             "detail": l.detail,
-            "created_at": l.created_at.isoformat()
-        } for l in ticket.activity_logs
+            "created_at": l.created_at.isoformat(),
+        }
+        for l in ticket.activity_logs
     ]
+
 
 @router.get("/{ticket_id}/export", response_model=None)
 def export_ticket_details(
     ticket_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Generates a downloadable markdown summary report.
-    """
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found.")
-        
+    """Generate a downloadable Markdown summary report for an authorized ticket."""
+    ticket = _get_authorized_ticket(ticket_id, db, current_user)
+
     report = (
         f"# ResolveAI Support Ticket Report\n\n"
         f"- **Ticket ID**: #{ticket.id}\n"
@@ -630,9 +599,15 @@ def export_ticket_details(
     )
     if ticket.resolution:
         report += f"## AI Resolution Summary\n{ticket.resolution}\n\n"
-        
+
     report += "## Support Activity Logs\n"
     for log in ticket.activity_logs:
         report += f"- [{log.created_at.isoformat()}] **{log.action}**: {log.detail}\n"
-        
-    return Response(content=report, media_type="text/markdown")
+
+    return Response(
+        content=report,
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": f'attachment; filename="resolveai-ticket-{ticket_id}.md"'
+        },
+    )

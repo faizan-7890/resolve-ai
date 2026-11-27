@@ -14,7 +14,7 @@ jobs:
 
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -31,16 +31,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
           pip install pytest pytest-asyncio httpx
 
@@ -64,6 +64,7 @@ jobs:
         env:
           SECRET_KEY: ci-test-secret-key-not-for-production
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/resolve_ai_test
+          CORS_ORIGINS: http://localhost:5173
 
   # ─── Frontend: Lint + Build ──────────────────────────────────────
   frontend-build:
@@ -74,10 +75,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 18
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
@@ -85,10 +86,13 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
       - name: Type-check
         working-directory: frontend
-        run: npx tsc --noEmit
-        continue-on-error: true   # Don't fail CI on type errors yet
+        run: npx tsc -b --noEmit
 
       - name: Build production bundle
         working-directory: frontend
