@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.exceptions import (
     LLMServiceError, EmbeddingServiceError, DatabaseError, 
@@ -182,7 +183,11 @@ def _logback_resolved_ticket(db: Session, ticket: Ticket, response_text: str) ->
         db.refresh(kb_doc)
         
         # Chunk, embed and save chunks
-        chunks = chunk_text(kb_content, chunk_size=500, chunk_overlap=100)
+        chunks = chunk_text(
+            kb_content,
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP,
+        )
         for c_text in chunks:
             try:
                 c_emb = get_embeddings(c_text)

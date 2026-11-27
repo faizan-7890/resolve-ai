@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, API_BASE } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { useToast } from '../context/ToastContext';
 import { 
   ArrowLeft, Cpu, HelpCircle, AlertTriangle, Loader2, Play, CheckSquare, 
@@ -76,6 +77,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
   const problemId = parseInt(id || '0', 10);
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { subscribe } = useSocket();
   const { showToast } = useToast();
   const [problem, setProblem] = useState<Problem | null>(null);
   const [similarCases, setSimilarCases] = useState<SimilarCase[]>([]);
@@ -171,6 +173,14 @@ const Workspace: React.FC<WorkspaceProps> = () => {
     fetchWorkspace();
   }, [problemId, token]);
 
+  useEffect(() => {
+    return subscribe((evt) => {
+      if (evt.ticket_id === problemId && evt.type === 'ticket_updated') {
+        fetchWorkspace();
+      }
+    });
+  }, [problemId, subscribe]);
+
   const handleGenerateClarifications = async () => {
     setAiLoading(true);
     try {
@@ -219,17 +229,16 @@ const Workspace: React.FC<WorkspaceProps> = () => {
     setAiLoading(true);
     setAgentSteps([]);
 
+    let streamCompleted = false;
     const url = `${API_BASE}/tickets/${problemId}/diagnose/stream`;
     const es = new EventSource(url + `?token=${encodeURIComponent(token || '')}`);
 
     // Note: EventSource doesn't support custom headers, so we use the streaming
     // GET endpoint. The token is sent as a query param for SSE auth.
-    // A more secure alternative is a cookie-based session.
     es.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         setAgentSteps(prev => {
-          // Update or append this step
           const existing = prev.findIndex(s => s.step === data.step && s.status === 'running');
           if (existing >= 0 && data.status === 'done') {
             const updated = [...prev];
@@ -240,6 +249,7 @@ const Workspace: React.FC<WorkspaceProps> = () => {
         });
 
         if (data.step === 'complete') {
+          streamCompleted = true;
           es.close();
           setAiLoading(false);
           fetchWorkspace();
@@ -252,8 +262,9 @@ const Workspace: React.FC<WorkspaceProps> = () => {
 
     es.onerror = () => {
       es.close();
+      if (streamCompleted) return;
       setAiLoading(false);
-      // Fallback to synchronous diagnose if SSE fails
+      // Fallback to synchronous diagnose if SSE fails before completing
       fetch(`${API_BASE}/tickets/${problemId}/diagnose`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -384,9 +395,9 @@ const Workspace: React.FC<WorkspaceProps> = () => {
 
   if (problem.diagnoses && problem.diagnoses.length > 0) {
     const diag = problem.diagnoses[0];
-    try { rootCauses = JSON.parse(diag.root_causes || '[]'); } catch(e){}
-    try { swot = JSON.parse(diag.swot_analysis || '{}'); } catch(e){}
-    try { firstPrinciples = JSON.parse(diag.first_principles || '[]'); } catch(e){}
+    try { rootCauses = JSON.parse(diag.root_causes || '[]'); } catch { /* ignore malformed JSON */ }
+    try { swot = JSON.parse(diag.swot_analysis || '{}'); } catch { /* ignore malformed JSON */ }
+    try { firstPrinciples = JSON.parse(diag.first_principles || '[]'); } catch { /* ignore malformed JSON */ }
   }
 
   // Calculations for tasks checklist

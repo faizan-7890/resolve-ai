@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
 import { ToastProvider } from './context/ToastContext';
 import Header from './components/Header';
 import Auth from './pages/Auth';
@@ -123,9 +124,11 @@ const AppRoutes: React.FC = () => {
 const App: React.FC = () => (
   <BrowserRouter>
     <AuthProvider>
-      <ToastProvider>
-        <AppRoutes />
-      </ToastProvider>
+      <SocketProvider>
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
+      </SocketProvider>
     </AuthProvider>
   </BrowserRouter>
 );

@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # CORS — comma-separated list of allowed origins
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
+    # Knowledge Base chunking configuration
+    CHUNK_SIZE: int = 500
+    CHUNK_OVERLAP: int = 100
+
     # Qdrant vector database (maintained for legacy compatibility if needed)
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
